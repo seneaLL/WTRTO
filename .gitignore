@@ -1,0 +1,6 @@
+/bin/
+/dist/
+/wtrto
+*.exe
+*.log
+.DS_Store
