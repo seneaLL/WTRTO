@@ -40,9 +40,12 @@ func SampleGPU() GPUSample {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	out, err := exec.CommandContext(ctx, nvidiaSMIPath,
+	cmd := exec.CommandContext(ctx, nvidiaSMIPath,
 		"--query-gpu=utilization.gpu,memory.used,memory.total",
-		"--format=csv,noheader,nounits").Output()
+		"--format=csv,noheader,nounits")
+	hideWindow(cmd)
+
+	out, err := cmd.Output()
 	if err != nil {
 		return GPUSample{}
 	}

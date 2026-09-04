@@ -40,9 +40,17 @@ func (w *Window) Size() (int, int) {
 
 func (w *Window) SetTargetFPS(fps int) {
 	if fps <= 0 {
-		fps = 1000
+		w.nw.SetVSync(true)
+
+		return
 	}
+
+	w.nw.SetVSync(false)
 	w.nw.SetFPS(fps)
+}
+
+func (w *Window) SetAlpha(a float64) {
+	w.nw.SetAlpha(a)
 }
 
 func (w *Window) SetClickThrough(enable bool) {

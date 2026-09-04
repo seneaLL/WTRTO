@@ -15,6 +15,8 @@ func NewProcTracker() *ProcTracker {
 	return &ProcTracker{procs: make(map[int32]*process.Process)}
 }
 
+var numCPU = runtime.NumCPU()
+
 func (t *ProcTracker) Sample(pids []int32) (cpuPercent float64, memMB float64, ok bool) {
 	for _, pid := range pids {
 		p, exists := t.procs[pid]
@@ -38,7 +40,7 @@ func (t *ProcTracker) Sample(pids []int32) (cpuPercent float64, memMB float64, o
 			continue
 		}
 
-		cpuPercent += c
+		cpuPercent += c / float64(numCPU)
 		memMB += float64(mem.RSS) / (1024 * 1024)
 		ok = true
 	}

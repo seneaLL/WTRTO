@@ -15,7 +15,8 @@ type EditState struct {
 	Selected   string
 	FocusField string
 
-	OpenDropdown string
+	OpenDropdown   string
+	DropdownScroll int
 
 	HideBackground bool
 
@@ -93,9 +94,7 @@ func formatValue(e Element, v Values) string {
 	}
 }
 
-func elementBounds(e Element, c *native.Canvas, screenW, screenH int) native.Rect {
-	x := int(e.X * float64(screenW))
-	y := int(e.Y * float64(screenH))
+func elementBounds(e Element, c *native.Canvas, screenW, screenH, x, y int) native.Rect {
 	switch e.Kind {
 	case KindHorizon:
 		r := int(e.Size * float64(screenH))
@@ -133,6 +132,22 @@ var (
 	editBgColor   = native.Color{R: 14, G: 16, B: 20, A: 235}
 )
 
+func clampToScreen(b native.Rect, screenW, screenH, x, y int) (int, int) {
+	if b.X < 0 {
+		x -= b.X
+	} else if right := b.X + b.W; right > screenW {
+		x -= right - screenW
+	}
+
+	if b.Y < 0 {
+		y -= b.Y
+	} else if bottom := b.Y + b.H; bottom > screenH {
+		y -= bottom - screenH
+	}
+
+	return x, y
+}
+
 func Draw(c *native.Canvas, screenW, screenH int, tmpl *Template, v Values, editMode bool, edit *EditState, in *native.Input) {
 	if !v.Valid && !editMode {
 		return
@@ -149,6 +164,39 @@ func Draw(c *native.Canvas, screenW, screenH int, tmpl *Template, v Values, edit
 		x := int(e.X * float64(screenW))
 		y := int(e.Y * float64(screenH))
 
+		var text string
+		fs := e.FontSize
+		if fs == 0 {
+			fs = 15
+		}
+
+		switch e.Kind {
+		case KindHorizon:
+			r := int(e.Size * float64(screenH))
+			x, y = clampToScreen(native.Rect{X: x - r, Y: y - r, W: r * 2, H: r * 2}, screenW, screenH, x, y)
+		case KindTapeV, KindTapeH:
+			x, y = clampToScreen(elementBounds(*e, c, screenW, screenH, x, y), screenW, screenH, x, y)
+		default:
+			text = formatValue(*e, v)
+			tw, th := c.TextSize(text, fs)
+			x, y = clampToScreen(native.Rect{X: x, Y: y - th, W: tw, H: th + 4}, screenW, screenH, x, y)
+		}
+
+		if e.GlowEnabled {
+			var bound native.Rect
+			switch e.Kind {
+			case KindHorizon:
+				r := int(e.Size * float64(screenH))
+				bound = native.Rect{X: x - r, Y: y - r, W: r * 2, H: r * 2}
+			case KindTapeV, KindTapeH:
+				bound = elementBounds(*e, c, screenW, screenH, x, y)
+			default:
+				tw, th := c.TextSize(text, fs)
+				bound = native.Rect{X: x, Y: y - th, W: tw, H: th + 4}
+			}
+			c.Glow(bound, glowColor(*e, v), e.GlowIntensity)
+		}
+
 		switch e.Kind {
 		case KindHorizon:
 			r := int(e.Size * float64(screenH))
@@ -161,19 +209,15 @@ func Draw(c *native.Canvas, screenW, screenH int, tmpl *Template, v Values, edit
 			length := int(e.Length * float64(screenW))
 			drawTapeH(c, x, y, length, bindingValue(e.Binding, v), *e, toNativeColor(e.Color))
 		default:
-			fs := e.FontSize
-			if fs == 0 {
-				fs = 15
-			}
 			if e.Bold {
-				c.TextBold(x, y, toNativeColor(e.Color), fs, formatValue(*e, v))
+				c.TextBold(x, y, toNativeColor(e.Color), fs, text)
 			} else {
-				c.Text(x, y, toNativeColor(e.Color), fs, formatValue(*e, v))
+				c.Text(x, y, toNativeColor(e.Color), fs, text)
 			}
 		}
 
 		if editMode {
-			b := elementBounds(*e, c, screenW, screenH)
+			b := elementBounds(*e, c, screenW, screenH, x, y)
 			borderCol := native.Color{R: 255, G: 255, B: 255, A: 130}
 			if edit.Dragging == e.ID {
 				borderCol = native.Color{R: 255, G: 210, B: 60, A: 230}
@@ -227,9 +271,9 @@ func Draw(c *native.Canvas, screenW, screenH int, tmpl *Template, v Values, edit
 
 				var leftOff, rightOff, topOff, bottomOff int
 				if dragged != nil {
-					db := elementBounds(*dragged, c, screenW, screenH)
 					anchorX0 := int(dragged.X * float64(screenW))
 					anchorY0 := int(dragged.Y * float64(screenH))
+					db := elementBounds(*dragged, c, screenW, screenH, anchorX0, anchorY0)
 					leftOff = db.X - anchorX0
 					rightOff = db.X + db.W - anchorX0
 					topOff = db.Y - anchorY0
@@ -253,7 +297,7 @@ func Draw(c *native.Canvas, screenW, screenH int, tmpl *Template, v Values, edit
 					ys = append(ys, screenH-oy)
 
 					if dragged != nil {
-						ob := elementBounds(*o, c, screenW, screenH)
+						ob := elementBounds(*o, c, screenW, screenH, ox, oy)
 						oLeft, oRight := ob.X, ob.X+ob.W
 						oTop, oBottom := ob.Y, ob.Y+ob.H
 						xs = append(xs, oLeft-leftOff, oLeft-rightOff, oRight-leftOff, oRight-rightOff)
@@ -264,8 +308,9 @@ func Draw(c *native.Canvas, screenW, screenH int, tmpl *Template, v Values, edit
 				if dragged != nil {
 					for i := 0; i < len(others); i++ {
 						for j := i + 1; j < len(others); j++ {
-							ab := elementBounds(*others[i], c, screenW, screenH)
-							bb := elementBounds(*others[j], c, screenW, screenH)
+							ai, bj := others[i], others[j]
+							ab := elementBounds(*ai, c, screenW, screenH, int(ai.X*float64(screenW)), int(ai.Y*float64(screenH)))
+							bb := elementBounds(*bj, c, screenW, screenH, int(bj.X*float64(screenW)), int(bj.Y*float64(screenH)))
 							if ab.X > bb.X {
 								ab, bb = bb, ab
 							}
@@ -318,6 +363,19 @@ func Draw(c *native.Canvas, screenW, screenH int, tmpl *Template, v Values, edit
 		edit.Selected = ""
 		edit.FocusField = ""
 		edit.OpenDropdown = ""
+	}
+}
+
+func glowColor(e Element, v Values) native.Color {
+	if !e.GlowUseOwn {
+		return toNativeColor(e.GlowColor)
+	}
+
+	switch e.Kind {
+	case KindTapeV, KindTapeH:
+		return zoneColor(e.Zones, bindingValue(e.Binding, v), toNativeColor(e.Color))
+	default:
+		return toNativeColor(e.Color)
 	}
 }
 

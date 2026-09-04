@@ -10,6 +10,7 @@ package native
 #include <X11/Xatom.h>
 #include <X11/keysym.h>
 #include <X11/extensions/shape.h>
+#include <X11/cursorfont.h>
 #include <X11/Xft/Xft.h>
 #include <cairo/cairo.h>
 #include <cairo/cairo-xlib.h>
@@ -76,6 +77,18 @@ static void wtrto_set_min_size(Display *d, Window win, int minw, int minh) {
     hints.min_width = minw;
     hints.min_height = minh;
     XSetWMNormalHints(d, win, &hints);
+}
+
+// wtrto_set_opacity sets _NET_WM_WINDOW_OPACITY, the de-facto standard
+// property compositing window managers (picom, mutter, kwin, etc.) read to
+// blend a whole window - the X11 equivalent of Windows'
+// UpdateLayeredWindow SourceConstantAlpha, used for the HUD fade in/out. On
+// a non-compositing WM the property is simply ignored and the window stays
+// opaque, which is a harmless degrade rather than a failure.
+static void wtrto_set_opacity(Display *d, Window win, double opacity) {
+    Atom opacityAtom = XInternAtom(d, "_NET_WM_WINDOW_OPACITY", False);
+    unsigned long value = (unsigned long)(opacity * (double)0xFFFFFFFFUL);
+    XChangeProperty(d, win, opacityAtom, XA_CARDINAL, 32, PropModeReplace, (unsigned char *)&value, 1);
 }
 
 static void wtrto_set_always_on_top(Display *d, Window win) {
@@ -179,6 +192,8 @@ import (
 	"unsafe"
 )
 
+const HasNativeTitleBar = true
+
 type Window struct {
 	display  *C.Display
 	win      C.Window
@@ -205,6 +220,16 @@ type Window struct {
 	root          C.Window
 	hotkeyKeycode C.int
 	hotkeyMods    C.uint
+
+	dragRect    Rect
+	hasDragRect bool
+	dragging    bool
+	dragOffsetX int
+	dragOffsetY int
+
+	arrowCursor  C.Cursor
+	handCursor   C.Cursor
+	cursorIsHand bool
 }
 
 func NewWindow(opts WindowOptions) (*Window, error) {
@@ -257,19 +282,21 @@ func NewWindow(opts WindowOptions) (*Window, error) {
 	}
 
 	w := &Window{
-		display:   d,
-		win:       win,
-		visual:    vinfo.visual,
-		depth:     vinfo.depth,
-		colormap:  cmap,
-		screen:    screen,
-		fonts:     make(map[fontKey]*C.XftFont),
-		w:         opts.W,
-		h:         opts.H,
-		resizable: opts.Decorated,
-		wmDelete:  wmDelete,
-		fps:       30,
-		root:      C.XDefaultRootWindow(d),
+		display:     d,
+		win:         win,
+		visual:      vinfo.visual,
+		depth:       vinfo.depth,
+		colormap:    cmap,
+		screen:      screen,
+		fonts:       make(map[fontKey]*C.XftFont),
+		w:           opts.W,
+		h:           opts.H,
+		resizable:   opts.Decorated,
+		wmDelete:    wmDelete,
+		fps:         30,
+		root:        C.XDefaultRootWindow(d),
+		arrowCursor: C.XCreateFontCursor(d, C.XC_left_ptr),
+		handCursor:  C.XCreateFontCursor(d, C.XC_hand2),
 	}
 	w.createBuffers(opts.W, opts.H)
 
@@ -351,6 +378,24 @@ func (w *Window) Pos() (int, int) {
 
 func (w *Window) SetPos(x, y int) {
 	C.XMoveWindow(w.display, w.win, C.int(x), C.int(y))
+	C.XFlush(w.display)
+}
+
+func (w *Window) SetDragRegion(r Rect) {
+	w.dragRect = r
+	w.hasDragRect = true
+}
+
+func (w *Window) SetHandCursor(hand bool) {
+	if hand == w.cursorIsHand {
+		return
+	}
+	w.cursorIsHand = hand
+	cur := w.arrowCursor
+	if hand {
+		cur = w.handCursor
+	}
+	C.XDefineCursor(w.display, w.win, cur)
 	C.XFlush(w.display)
 }
 
@@ -437,6 +482,7 @@ func (w *Window) pollEvents(in *Input) {
 	in.KeyLeft = false
 	in.KeyRight = false
 	in.HotkeyTriggered = false
+	in.ScrollDelta = 0
 
 	for C.XPending(w.display) > 0 {
 		var ev C.XEvent
@@ -448,14 +494,32 @@ func (w *Window) pollEvents(in *Input) {
 			in.MouseX = int(me.x)
 			in.MouseY = int(me.y)
 			in.KeyMods = uint(me.state)
+			if w.dragging {
+				w.SetPos(int(me.x_root)-w.dragOffsetX, int(me.y_root)-w.dragOffsetY)
+			}
 		case C.ButtonPress:
 			be := (*C.XButtonEvent)(unsafe.Pointer(&ev))
 			in.KeyMods = uint(be.state)
-			if be.button == C.Button1 {
+			switch be.button {
+			case C.Button1:
 				in.MouseDown = true
 				in.Pressed = true
 				in.MouseX = int(be.x)
 				in.MouseY = int(be.y)
+				if w.hasDragRect && w.dragRect.Contains(int(be.x), int(be.y)) {
+					winX, winY := w.Pos()
+					w.dragging = true
+					w.dragOffsetX = int(be.x_root) - winX
+					w.dragOffsetY = int(be.y_root) - winY
+				}
+			case 4:
+				in.MouseX = int(be.x)
+				in.MouseY = int(be.y)
+				in.ScrollDelta++
+			case 5:
+				in.MouseX = int(be.x)
+				in.MouseY = int(be.y)
+				in.ScrollDelta--
 			}
 		case C.ButtonRelease:
 			be := (*C.XButtonEvent)(unsafe.Pointer(&ev))
@@ -465,6 +529,7 @@ func (w *Window) pollEvents(in *Input) {
 				in.Released = true
 				in.MouseX = int(be.x)
 				in.MouseY = int(be.y)
+				w.dragging = false
 			}
 		case C.KeyPress:
 			ke := (*C.XKeyEvent)(unsafe.Pointer(&ev))
@@ -522,6 +587,26 @@ func (w *Window) SetFPS(fps int) {
 	}
 	w.fps = fps
 }
+
+func (w *Window) SetVSync(enabled bool) {
+	if enabled {
+		w.fps = 240
+	}
+}
+
+func (w *Window) SetAlpha(a float64) {
+	if a < 0 {
+		a = 0
+	}
+	if a > 1 {
+		a = 1
+	}
+	C.wtrto_set_opacity(w.display, w.win, C.double(a))
+	C.XFlush(w.display)
+}
+
+func (w *Window) EnableTray(tooltip, showLabel, exitLabel string, onShow, onExit func()) {}
+func (w *Window) DisableTray()                                                           {}
 
 func (w *Window) Run(frame FrameFunc) {
 	var in Input

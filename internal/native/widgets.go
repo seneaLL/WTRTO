@@ -12,6 +12,31 @@ const (
 	RadiusLarge  = 14
 )
 
+func fitText(c *Canvas, s string, fontSize, maxWidth int) (string, int, int) {
+	w, h := c.TextSize(s, fontSize)
+	if maxWidth <= 0 || w <= maxWidth {
+		return s, w, h
+	}
+
+	const ellipsis = "…"
+	ew, _ := c.TextSize(ellipsis, fontSize)
+
+	runes := []rune(s)
+	tw := w
+	for len(runes) > 0 {
+		runes = runes[:len(runes)-1]
+		if tw, _ = c.TextSize(string(runes), fontSize); tw+ew <= maxWidth {
+			break
+		}
+	}
+
+	if len(runes) == 0 {
+		return ellipsis, ew, h
+	}
+
+	return string(runes) + ellipsis, tw + ew, h
+}
+
 func Button(c *Canvas, in *Input, r Rect, label string, bg, bgHover, textCol Color, fontSize int) bool {
 	hover := r.Contains(in.MouseX, in.MouseY)
 	col := bg
@@ -20,7 +45,7 @@ func Button(c *Canvas, in *Input, r Rect, label string, bg, bgHover, textCol Col
 	}
 	c.FillRoundedRect(r, RadiusSmall, col)
 
-	tw, th := c.TextSize(label, fontSize)
+	label, tw, th := fitText(c, label, fontSize, r.W-12)
 	c.Text(r.X+(r.W-tw)/2, r.Y+(r.H+th)/2-2, textCol, fontSize, label)
 
 	return hover && in.Released
@@ -201,6 +226,7 @@ func NumberStepper(c *Canvas, in *Input, r Rect, value, step float64, precision 
 	c.StrokeRect(midRect, borderCol, 1)
 
 	buf = editBuf
+	c.ClipRect(Rect{X: midRect.X + 2, Y: midRect.Y, W: midRect.W - 4, H: midRect.H})
 	if editing && !stepped {
 		submitted, clipErr = applyTextEditKeys(in, &buf, cursor, selectedAll)
 
@@ -224,6 +250,7 @@ func NumberStepper(c *Canvas, in *Input, r Rect, value, step float64, precision 
 		tw, th := c.TextSize(label, fontSize)
 		c.Text(midRect.X+(midRect.W-tw)/2, midRect.Y+(midRect.H+th)/2-2, textCol, fontSize, label)
 	}
+	c.Unclip()
 
 	clicked = midHover && in.Released && !editing && !stepped
 
@@ -361,53 +388,95 @@ func SelectBox(c *Canvas, in *Input, r Rect, current string, open bool, bg, bgHo
 	}
 	c.FillRoundedRect(r, RadiusSmall, col)
 
-	_, th := c.TextSize(current, fontSize)
-	c.Text(r.X+10, r.Y+(r.H+th)/2-2, textCol, fontSize, current)
-
 	arrow := "v"
 	if open {
 		arrow = "^"
 	}
-	aw, _ := c.TextSize(arrow, fontSize)
+	aw, th := c.TextSize(arrow, fontSize)
+
+	label, _, _ := fitText(c, current, fontSize, r.W-20-aw-10)
+	c.Text(r.X+10, r.Y+(r.H+th)/2-2, textCol, fontSize, label)
 	c.Text(r.X+r.W-aw-10, r.Y+(r.H+th)/2-2, textCol, fontSize, arrow)
 
 	return hover && in.Released
 }
 
-func SelectListBounds(headerRect Rect, optionCount int) Rect {
-	maxRows := 300 / SelectRowHeight
+const SelectMaxVisibleRows = 8
+
+func SelectListBounds(headerRect Rect, optionCount, containerH int) Rect {
 	rows := optionCount
-	if rows > maxRows {
-		rows = maxRows
+	if rows > SelectMaxVisibleRows {
+		rows = SelectMaxVisibleRows
+	}
+	h := rows * SelectRowHeight
+
+	y := headerRect.Y + headerRect.H
+	if containerH > 0 && y+h > containerH {
+		if up := headerRect.Y - h; up >= 0 {
+			y = up
+		} else if fit := containerH - h; fit >= 0 {
+			y = fit
+		}
 	}
 
-	return Rect{X: headerRect.X, Y: headerRect.Y + headerRect.H, W: headerRect.W, H: rows * SelectRowHeight}
+	return Rect{X: headerRect.X, Y: y, W: headerRect.W, H: h}
 }
 
-func SelectList(c *Canvas, in *Input, headerRect Rect, options []string, current int, bg, hoverBg, textCol, borderCol Color, fontSize int) (newIdx int, selected bool) {
-	listRect := SelectListBounds(headerRect, len(options))
+func SelectList(c *Canvas, in *Input, headerRect Rect, options []string, current int, scroll *int, containerH int, bg, hoverBg, textCol, borderCol Color, fontSize int) (newIdx int, selected bool) {
+	listRect := SelectListBounds(headerRect, len(options), containerH)
+
+	maxScroll := len(options) - SelectMaxVisibleRows
+	if maxScroll < 0 {
+		maxScroll = 0
+	}
+
+	if listRect.Contains(in.MouseX, in.MouseY) && in.ScrollDelta != 0 {
+		*scroll -= in.ScrollDelta
+	}
+	if *scroll < 0 {
+		*scroll = 0
+	}
+	if *scroll > maxScroll {
+		*scroll = maxScroll
+	}
+
 	c.FillRoundedRect(listRect, RadiusSmall, bg)
 	c.StrokeRoundedRect(listRect, RadiusSmall, borderCol, 1)
 
 	newIdx = current
-	for i, opt := range options {
+	visible := len(options) - *scroll
+	if visible > SelectMaxVisibleRows {
+		visible = SelectMaxVisibleRows
+	}
+
+	c.ClipRect(listRect)
+	for i := 0; i < visible; i++ {
+		optIdx := i + *scroll
 		rowRect := Rect{X: listRect.X, Y: listRect.Y + i*SelectRowHeight, W: listRect.W, H: SelectRowHeight}
-		if rowRect.Y+rowRect.H > listRect.Y+listRect.H {
-			break
-		}
 		hover := rowRect.Contains(in.MouseX, in.MouseY)
 		if hover {
 			c.FillRect(rowRect, hoverBg)
 		}
-		if i == current {
+		if optIdx == current {
 			c.FillRect(Rect{X: rowRect.X, Y: rowRect.Y, W: 3, H: rowRect.H}, textCol)
 		}
-		_, th := c.TextSize(opt, fontSize)
-		c.Text(rowRect.X+10, rowRect.Y+(rowRect.H+th)/2-2, textCol, fontSize, opt)
+		label, _, th := fitText(c, options[optIdx], fontSize, rowRect.W-20)
+		c.Text(rowRect.X+10, rowRect.Y+(rowRect.H+th)/2-2, textCol, fontSize, label)
 		if hover && in.Released {
-			newIdx = i
+			newIdx = optIdx
 			selected = true
 		}
+	}
+	c.Unclip()
+
+	if maxScroll > 0 {
+		trackH := listRect.H - 6
+		thumbH := trackH * SelectMaxVisibleRows / len(options)
+		if thumbH < 14 {
+			thumbH = 14
+		}
+		thumbY := listRect.Y + 3 + (trackH-thumbH)*(*scroll)/maxScroll
+		c.FillRoundedRect(Rect{X: listRect.X + listRect.W - 5, Y: thumbY, W: 3, H: thumbH}, 1, borderCol)
 	}
 
 	return newIdx, selected

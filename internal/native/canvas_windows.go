@@ -10,6 +10,9 @@ var (
 
 	procGdiplusStartup               = gdiplus.NewProc("GdiplusStartup")
 	procGdipCreateFromHDC            = gdiplus.NewProc("GdipCreateFromHDC")
+	procGdipCreateBitmapFromScan0    = gdiplus.NewProc("GdipCreateBitmapFromScan0")
+	procGdipGetImageGraphicsContext  = gdiplus.NewProc("GdipGetImageGraphicsContext")
+	procGdipDisposeImage             = gdiplus.NewProc("GdipDisposeImage")
 	procGdipDeleteGraphics           = gdiplus.NewProc("GdipDeleteGraphics")
 	procGdipGraphicsClear            = gdiplus.NewProc("GdipGraphicsClear")
 	procGdipSetSmoothingMode         = gdiplus.NewProc("GdipSetSmoothingMode")
@@ -45,15 +48,17 @@ var (
 
 const (
 	smoothingModeAntiAlias = 4
-	textRenderingHintAA    = 4
-	combineModeReplace     = 0
-	lineCapRound           = 2
-	lineJoinRound          = 2
-	unitPixel              = 2
-	fontStyleRegular       = 0
-	fontStyleBold          = 1
-	matrixOrderPrepend     = 0
-	fillModeAlternate      = 0
+
+	textRenderingHintAA   = 3
+	combineModeReplace    = 0
+	lineCapRound          = 2
+	lineJoinRound         = 2
+	unitPixel             = 2
+	fontStyleRegular      = 0
+	fontStyleBold         = 1
+	matrixOrderPrepend    = 0
+	fillModeAlternate     = 0
+	pixelFormat32bppPARGB = 0x000E200B
 )
 
 type gdiplusStartupInput struct {
@@ -72,6 +77,14 @@ type Canvas struct {
 	win *Window
 }
 
+type textSizeKey struct {
+	s    string
+	size int
+	bold bool
+}
+
+type textSizeVal struct{ w, h int }
+
 var gdipToken uintptr
 
 func gdipInit() {
@@ -85,13 +98,22 @@ func gdipInit() {
 	gdipToken = token
 }
 
-func gdipCreateFromHDC(hdc uintptr) uintptr {
-	var graphics uintptr
-	procGdipCreateFromHDC.Call(hdc, uintptr(unsafe.Pointer(&graphics)))
+func gdipCreateBitmapGraphics(width, height int, bits uintptr) (bitmap, graphics uintptr) {
+	stride := width * 4
+	procGdipCreateBitmapFromScan0.Call(
+		uintptr(width), uintptr(height), uintptr(stride),
+		uintptr(pixelFormat32bppPARGB), bits,
+		uintptr(unsafe.Pointer(&bitmap)),
+	)
+	procGdipGetImageGraphicsContext.Call(bitmap, uintptr(unsafe.Pointer(&graphics)))
 	procGdipSetSmoothingMode.Call(graphics, smoothingModeAntiAlias)
 	procGdipSetTextRenderingHint.Call(graphics, textRenderingHintAA)
 
-	return graphics
+	return bitmap, graphics
+}
+
+func gdipDisposeImage(bitmap uintptr) {
+	procGdipDisposeImage.Call(bitmap)
 }
 
 func gdipDeleteGraphics(g uintptr) {
@@ -104,6 +126,41 @@ func gdipClearGraphics(g uintptr) {
 
 func argb(col Color) uintptr {
 	return uintptr(uint32(col.A)<<24 | uint32(col.R)<<16 | uint32(col.G)<<8 | uint32(col.B))
+}
+
+func argbKey(col Color) uint32 {
+	return uint32(col.A)<<24 | uint32(col.R)<<16 | uint32(col.G)<<8 | uint32(col.B)
+}
+
+type penKey struct {
+	col   uint32
+	width float32
+}
+
+func (c *Canvas) brushFor(col Color) uintptr {
+	key := argbKey(col)
+	if b, ok := c.win.brushes[key]; ok {
+		return b
+	}
+
+	var brush uintptr
+	procGdipCreateSolidFill.Call(argb(col), uintptr(unsafe.Pointer(&brush)))
+	c.win.brushes[key] = brush
+
+	return brush
+}
+
+func (c *Canvas) penFor(col Color, width float32) uintptr {
+	key := penKey{col: argbKey(col), width: width}
+	if p, ok := c.win.pens[key]; ok {
+		return p
+	}
+
+	var pen uintptr
+	procGdipCreatePen1.Call(argb(col), floatBits(width), unitPixel, uintptr(unsafe.Pointer(&pen)))
+	c.win.pens[key] = pen
+
+	return pen
 }
 
 func (c *Canvas) Size() (int, int) {
@@ -119,17 +176,13 @@ func (c *Canvas) Unclip() {
 }
 
 func (c *Canvas) FillRect(r Rect, col Color) {
-	var brush uintptr
-	procGdipCreateSolidFill.Call(argb(col), uintptr(unsafe.Pointer(&brush)))
-	defer procGdipDeleteBrush.Call(brush)
+	brush := c.brushFor(col)
 
 	procGdipFillRectangleI.Call(c.win.graphics, brush, uintptr(r.X), uintptr(r.Y), uintptr(r.W), uintptr(r.H))
 }
 
 func (c *Canvas) StrokeRect(r Rect, col Color, width int) {
-	var pen uintptr
-	procGdipCreatePen1.Call(argb(col), floatBits(float32(width)), unitPixel, uintptr(unsafe.Pointer(&pen)))
-	defer procGdipDeletePen.Call(pen)
+	pen := c.penFor(col, float32(width))
 
 	half := width / 2
 	procGdipDrawRectangleI.Call(c.win.graphics, pen, uintptr(r.X+half), uintptr(r.Y+half), uintptr(r.W-2*half), uintptr(r.H-2*half))
@@ -161,9 +214,7 @@ func (c *Canvas) FillRoundedRect(r Rect, radius int, col Color) {
 	path := roundedRectPath(r, radius)
 	defer procGdipDeletePath.Call(path)
 
-	var brush uintptr
-	procGdipCreateSolidFill.Call(argb(col), uintptr(unsafe.Pointer(&brush)))
-	defer procGdipDeleteBrush.Call(brush)
+	brush := c.brushFor(col)
 
 	procGdipFillPath.Call(c.win.graphics, brush, path)
 }
@@ -174,17 +225,13 @@ func (c *Canvas) StrokeRoundedRect(r Rect, radius int, col Color, width int) {
 	path := roundedRectPath(inset, radius)
 	defer procGdipDeletePath.Call(path)
 
-	var pen uintptr
-	procGdipCreatePen1.Call(argb(col), floatBits(float32(width)), unitPixel, uintptr(unsafe.Pointer(&pen)))
-	defer procGdipDeletePen.Call(pen)
+	pen := c.penFor(col, float32(width))
 
 	procGdipDrawPath.Call(c.win.graphics, pen, path)
 }
 
 func (c *Canvas) FillCircle(cx, cy, radius int, col Color) {
-	var brush uintptr
-	procGdipCreateSolidFill.Call(argb(col), uintptr(unsafe.Pointer(&brush)))
-	defer procGdipDeleteBrush.Call(brush)
+	brush := c.brushFor(col)
 
 	procGdipFillEllipseI.Call(c.win.graphics, brush, uintptr(cx-radius), uintptr(cy-radius), uintptr(radius*2), uintptr(radius*2))
 }
@@ -194,9 +241,7 @@ func (c *Canvas) Line(points []Point, col Color, width int) {
 		return
 	}
 
-	var pen uintptr
-	procGdipCreatePen1.Call(argb(col), floatBits(float32(width)), unitPixel, uintptr(unsafe.Pointer(&pen)))
-	defer procGdipDeletePen.Call(pen)
+	pen := c.penFor(col, float32(width))
 
 	procGdipSetPenLineCap197819.Call(pen, lineCapRound, lineCapRound, lineCapRound)
 	procGdipSetPenLineJoin.Call(pen, lineJoinRound)
@@ -245,9 +290,7 @@ func (c *Canvas) text(x, y int, col Color, size int, bold bool, s string) {
 	}
 	utf16Str = utf16Str[:len(utf16Str)-1]
 
-	var brush uintptr
-	procGdipCreateSolidFill.Call(argb(col), uintptr(unsafe.Pointer(&brush)))
-	defer procGdipDeleteBrush.Call(brush)
+	brush := c.brushFor(col)
 
 	rc := gpRectF{X: float32(x), Y: float32(y - size), W: 4000, H: float32(size) * 2}
 
@@ -271,8 +314,17 @@ func (c *Canvas) TextBold(x, y int, col Color, size int, s string) {
 }
 
 func (c *Canvas) textSize(s string, size int, bold bool) (int, int) {
+	if s == "" {
+		return 0, size + 4
+	}
+
+	key := textSizeKey{s: s, size: size, bold: bold}
+	if v, ok := c.win.textSizes[key]; ok {
+		return v.w, v.h
+	}
+
 	font := c.fontFor(size, bold)
-	if font == 0 || s == "" {
+	if font == 0 {
 		return 0, size + 4
 	}
 
@@ -297,7 +349,10 @@ func (c *Canvas) textSize(s string, size int, bold bool) (int, int) {
 		uintptr(unsafe.Pointer(&bbox)), uintptr(unsafe.Pointer(&charsFitted)), uintptr(unsafe.Pointer(&linesFilled)),
 	)
 
-	return int(bbox.W), size + 4
+	w, h := int(bbox.W), size+4
+	c.win.textSizes[key] = textSizeVal{w: w, h: h}
+
+	return w, h
 }
 
 func (c *Canvas) TextSize(s string, size int) (int, int) {
@@ -324,37 +379,27 @@ func (c *Canvas) DrawArtificialHorizon(cx, cy, radius int, pitchDeg, rollDeg flo
 	big := radius * 3
 	pitchOffset := int(pitchDeg / 90.0 * float64(radius))
 
-	var skyBrush, groundBrush uintptr
-	procGdipCreateSolidFill.Call(argb(sky), uintptr(unsafe.Pointer(&skyBrush)))
-	procGdipCreateSolidFill.Call(argb(ground), uintptr(unsafe.Pointer(&groundBrush)))
+	skyBrush := c.brushFor(sky)
+	groundBrush := c.brushFor(ground)
 
 	procGdipFillRectangleI.Call(g, skyBrush, uintptr(-big), uintptr(-big+pitchOffset), uintptr(2*big), uintptr(big))
 	procGdipFillRectangleI.Call(g, groundBrush, uintptr(-big), uintptr(pitchOffset), uintptr(2*big), uintptr(big))
 
-	procGdipDeleteBrush.Call(skyBrush)
-	procGdipDeleteBrush.Call(groundBrush)
-
-	var linePen uintptr
-	procGdipCreatePen1.Call(argb(line), floatBits(2), unitPixel, uintptr(unsafe.Pointer(&linePen)))
+	linePen := c.penFor(line, 2)
 	horizonPts := []gpPointI{{X: int32(-big), Y: int32(pitchOffset)}, {X: int32(big), Y: int32(pitchOffset)}}
 	procGdipDrawLinesI.Call(g, linePen, uintptr(unsafe.Pointer(&horizonPts[0])), 2)
-	procGdipDeletePen.Call(linePen)
 
 	procGdipResetWorldTransform.Call(g)
 	procGdipResetClip.Call(g)
 
-	var borderPen uintptr
-	procGdipCreatePen1.Call(argb(border), floatBits(2), unitPixel, uintptr(unsafe.Pointer(&borderPen)))
+	borderPen := c.penFor(border, 2)
 	procGdipDrawRectangleI.Call(g, borderPen, uintptr(cx-radius), uintptr(cy-radius), uintptr(radius*2), uintptr(radius*2))
-	procGdipDeletePen.Call(borderPen)
 
-	var tickPen uintptr
-	procGdipCreatePen1.Call(argb(line), floatBits(2), unitPixel, uintptr(unsafe.Pointer(&tickPen)))
+	tickPen := c.penFor(line, 2)
 	left := []gpPointI{{X: int32(cx - 14), Y: int32(cy)}, {X: int32(cx - 4), Y: int32(cy)}}
 	right := []gpPointI{{X: int32(cx + 4), Y: int32(cy)}, {X: int32(cx + 14), Y: int32(cy)}}
 	procGdipDrawLinesI.Call(g, tickPen, uintptr(unsafe.Pointer(&left[0])), 2)
 	procGdipDrawLinesI.Call(g, tickPen, uintptr(unsafe.Pointer(&right[0])), 2)
-	procGdipDeletePen.Call(tickPen)
 }
 
 func floatBits(f float32) uintptr {

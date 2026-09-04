@@ -6,10 +6,14 @@ import (
 	"unsafe"
 )
 
+const HasNativeTitleBar = false
+
 var (
 	user32   = syscall.NewLazyDLL("user32.dll")
 	gdi32    = syscall.NewLazyDLL("gdi32.dll")
 	kernel32 = syscall.NewLazyDLL("kernel32.dll")
+	dwmapi   = syscall.NewLazyDLL("dwmapi.dll")
+	winmm    = syscall.NewLazyDLL("winmm.dll")
 
 	procRegisterClassExW         = user32.NewProc("RegisterClassExW")
 	procCreateWindowExW          = user32.NewProc("CreateWindowExW")
@@ -32,6 +36,9 @@ var (
 	procGetForegroundWindow      = user32.NewProc("GetForegroundWindow")
 	procGetWindowThreadProcessId = user32.NewProc("GetWindowThreadProcessId")
 	procGetKeyState              = user32.NewProc("GetKeyState")
+	procLoadCursorW              = user32.NewProc("LoadCursorW")
+	procSetCursor                = user32.NewProc("SetCursor")
+	procGetWindowRect            = user32.NewProc("GetWindowRect")
 
 	procCreateCompatibleDC = gdi32.NewProc("CreateCompatibleDC")
 	procCreateDIBSection   = gdi32.NewProc("CreateDIBSection")
@@ -40,42 +47,80 @@ var (
 	procDeleteDC           = gdi32.NewProc("DeleteDC")
 
 	procGetModuleHandleW = kernel32.NewProc("GetModuleHandleW")
+
+	procDwmFlush = dwmapi.NewProc("DwmFlush")
+
+	procTimeBeginPeriod = winmm.NewProc("timeBeginPeriod")
+	procTimeEndPeriod   = winmm.NewProc("timeEndPeriod")
 )
 
 var gwlExStyle = -20
 
 const (
-	wsPopup      = 0x80000000
-	wsExLayered  = 0x00080000
-	wsExTopMost  = 0x00000008
-	wsExToolWin  = 0x00000080
-	wsExTransp   = 0x00000020
-	swHide       = 0
-	swShow       = 5
-	ulwAlpha     = 2
-	acSrcOver    = 0
-	acSrcAlpha   = 1
-	pmRemove     = 0x0001
-	wmDestroy    = 0x0002
-	wmClose      = 0x0010
-	wmMouseMove  = 0x0200
-	wmLButtonDwn = 0x0201
-	wmLButtonUp  = 0x0202
-	wmKeyDown    = 0x0100
-	wmChar       = 0x0102
-	wmHotkey     = 0x0312
-	vkBack       = 0x08
-	vkReturn     = 0x0D
-	vkEscape     = 0x1B
-	vkDelete     = 0x2E
-	vkLeft       = 0x25
-	vkRight      = 0x27
-	vkShift      = 0x10
-	vkControl    = 0x11
-	vkMenu       = 0x12
-	vkLWin       = 0x5B
-	vkRWin       = 0x5C
+	wsPopup         = 0x80000000
+	wsExLayered     = 0x00080000
+	wsExTopMost     = 0x00000008
+	wsExToolWin     = 0x00000080
+	wsExTransp      = 0x00000020
+	swHide          = 0
+	swShow          = 5
+	ulwAlpha        = 2
+	acSrcOver       = 0
+	acSrcAlpha      = 1
+	pmRemove        = 0x0001
+	wmNull          = 0x0000
+	wmDestroy       = 0x0002
+	wmClose         = 0x0010
+	wmMouseMove     = 0x0200
+	wmLButtonDwn    = 0x0201
+	wmLButtonUp     = 0x0202
+	wmRButtonUp     = 0x0205
+	wmMouseWheel    = 0x020A
+	wmKeyDown       = 0x0100
+	wmChar          = 0x0102
+	wmSize          = 0x0005
+	wmGetMinMaxInfo = 0x0024
+	wmHotkey        = 0x0312
+	wmTrayIcon      = 0x8000 + 1
+	vkBack          = 0x08
+	vkReturn        = 0x0D
+	vkEscape        = 0x1B
+	vkDelete        = 0x2E
+	vkLeft          = 0x25
+	vkRight         = 0x27
+	vkShift         = 0x10
+	vkControl       = 0x11
+	vkMenu          = 0x12
+	vkLWin          = 0x5B
+	vkRWin          = 0x5C
+	wmSetCursor     = 0x0020
+	idcArrow        = 32512
+	idcHand         = 32649
+	wmNCHitTest     = 0x0084
+	htClient        = 1
+	htCaption       = 2
+	htLeft          = 10
+	htRight         = 11
+	htTop           = 12
+	htTopLeft       = 13
+	htTopRight      = 14
+	htBottom        = 15
+	htBottomLeft    = 16
+	htBottomRight   = 17
+	resizeBorderPx  = 8
+	minWindowWidth  = 420
+	minWindowHeight = 420
 )
+
+type rectT struct{ Left, Top, Right, Bottom int32 }
+
+type minMaxInfo struct {
+	ptReserved     point32
+	ptMaxSize      point32
+	ptMaxPosition  point32
+	ptMinTrackSize point32
+	ptMaxTrackSize point32
+}
 
 type wndClassEx struct {
 	cbSize        uint32
@@ -175,27 +220,71 @@ func lparamToXY(lParam uintptr) (int, int) {
 }
 
 type Window struct {
-	hwnd     uintptr
-	hInst    uintptr
-	memDC    uintptr
-	hBitmap  uintptr
-	graphics uintptr
+	hwnd       uintptr
+	hInst      uintptr
+	memDC      uintptr
+	hBitmap    uintptr
+	gdipBitmap uintptr
+	graphics   uintptr
 
-	fonts map[fontKey]uintptr
+	fonts     map[fontKey]uintptr
+	brushes   map[uint32]uintptr
+	pens      map[penKey]uintptr
+	textSizes map[textSizeKey]textSizeVal
+
+	arrowCursor    uintptr
+	handCursor     uintptr
+	wantHandCursor bool
 
 	w, h        int
 	fps         int
+	vsync       bool
+	visible     bool
 	resizable   bool
 	shouldClose bool
 	input       *Input
+	alpha       float64
 
 	hotkeyRegistered bool
+
+	dragRect    Rect
+	hasDragRect bool
+
+	trayActive    bool
+	trayNID       notifyIconDataW
+	trayShowLabel string
+	trayExitLabel string
+	onTrayShow    func()
+	onTrayExit    func()
+}
+
+func (w *Window) SetHandCursor(hand bool) {
+	if w.wantHandCursor == hand {
+		return
+	}
+	w.wantHandCursor = hand
+	cur := w.arrowCursor
+	if hand {
+		cur = w.handCursor
+	}
+	procSetCursor.Call(cur)
+}
+
+func (w *Window) SetDragRegion(r Rect) {
+	w.dragRect = r
+	w.hasDragRect = true
 }
 
 var currentWindow *Window
 
 func wndProcCallback(hwnd, msg, wParam, lParam uintptr) uintptr {
 	if currentWindow != nil && currentWindow.hwnd == hwnd {
+		if uint32(msg) == wmNCHitTest {
+			if ht, ok := currentWindow.hitTest(lParam); ok {
+				return ht
+			}
+		}
+
 		if handled := currentWindow.handleMessage(uint32(msg), wParam, lParam); handled {
 			return 0
 		}
@@ -206,7 +295,74 @@ func wndProcCallback(hwnd, msg, wParam, lParam uintptr) uintptr {
 	return ret
 }
 
+func (w *Window) hitTest(lParam uintptr) (uintptr, bool) {
+	var rect rectT
+	procGetWindowRect.Call(w.hwnd, uintptr(unsafe.Pointer(&rect)))
+
+	sx, sy := lparamToXY(lParam)
+	localX := sx - int(rect.Left)
+	localY := sy - int(rect.Top)
+
+	if w.resizable {
+		width := int(rect.Right - rect.Left)
+		height := int(rect.Bottom - rect.Top)
+
+		left := localX < resizeBorderPx
+		right := localX >= width-resizeBorderPx
+		top := localY < resizeBorderPx
+		bottom := localY >= height-resizeBorderPx
+
+		switch {
+		case left && top:
+			return htTopLeft, true
+		case right && top:
+			return htTopRight, true
+		case left && bottom:
+			return htBottomLeft, true
+		case right && bottom:
+			return htBottomRight, true
+		case left:
+			return htLeft, true
+		case right:
+			return htRight, true
+		case top:
+			return htTop, true
+		case bottom:
+			return htBottom, true
+		}
+	}
+
+	if !w.hasDragRect {
+		return 0, false
+	}
+
+	if w.dragRect.Contains(localX, localY) {
+		return htCaption, true
+	}
+
+	return htClient, true
+}
+
 func (w *Window) handleMessage(msg uint32, wParam, lParam uintptr) bool {
+	switch msg {
+	case wmGetMinMaxInfo:
+		if w.resizable {
+			mmi := (*minMaxInfo)(unsafe.Pointer(lParam))
+			mmi.ptMinTrackSize = point32{X: minWindowWidth, Y: minWindowHeight}
+		}
+
+		return true
+
+	case wmSize:
+		newW := int(lParam & 0xFFFF)
+		newH := int((lParam >> 16) & 0xFFFF)
+		if w.resizable && newW > 0 && newH > 0 && (newW != w.w || newH != w.h) {
+			w.resizeBuffers(newW, newH)
+		}
+
+		return true
+	}
+
 	in := w.input
 	if in == nil {
 		return false
@@ -243,6 +399,12 @@ func (w *Window) handleMessage(msg uint32, wParam, lParam uintptr) bool {
 		in.Released = true
 		in.MouseX, in.MouseY = lparamToXY(lParam)
 		in.KeyMods = currentKeyMods()
+
+		return true
+
+	case wmMouseWheel:
+		delta := int16(uint16((wParam >> 16) & 0xFFFF))
+		in.ScrollDelta += int(delta) / 120
 
 		return true
 
@@ -294,6 +456,35 @@ func (w *Window) handleMessage(msg uint32, wParam, lParam uintptr) bool {
 		}
 
 		return true
+
+	case wmTrayIcon:
+		switch uint32(lParam) {
+		case wmLButtonUp:
+			if w.onTrayShow != nil {
+				w.onTrayShow()
+			}
+		case wmRButtonUp:
+			w.showTrayMenu()
+		}
+
+		return true
+
+	case wmSetCursor:
+
+		if w.resizable {
+			switch uintptr(lParam & 0xFFFF) {
+			case htLeft, htRight, htTop, htBottom, htTopLeft, htTopRight, htBottomLeft, htBottomRight:
+				return false
+			}
+		}
+
+		cur := w.arrowCursor
+		if w.wantHandCursor {
+			cur = w.handCursor
+		}
+		procSetCursor.Call(cur)
+
+		return true
 	}
 
 	return false
@@ -302,15 +493,21 @@ func (w *Window) handleMessage(msg uint32, wParam, lParam uintptr) bool {
 func NewWindow(opts WindowOptions) (*Window, error) {
 	gdipInit()
 
+	procTimeBeginPeriod.Call(1)
+
 	hInst, _, _ := procGetModuleHandleW.Call(0)
 
 	className, _ := syscall.UTF16PtrFromString("WTRTOWindowClass")
 	title, _ := syscall.UTF16PtrFromString(opts.Title)
 
+	arrowCursor, _, _ := procLoadCursorW.Call(0, idcArrow)
+	handCursor, _, _ := procLoadCursorW.Call(0, idcHand)
+
 	wc := wndClassEx{
 		style:         0,
 		lpfnWndProc:   syscall.NewCallback(wndProcCallback),
 		hInstance:     hInst,
+		hCursor:       arrowCursor,
 		lpszClassName: className,
 	}
 	wc.cbSize = uint32(unsafe.Sizeof(wc))
@@ -338,13 +535,20 @@ func NewWindow(opts WindowOptions) (*Window, error) {
 	}
 
 	w := &Window{
-		hwnd:      hwnd,
-		hInst:     hInst,
-		w:         opts.W,
-		h:         opts.H,
-		resizable: opts.Decorated,
-		fps:       30,
-		fonts:     make(map[fontKey]uintptr),
+		hwnd:        hwnd,
+		hInst:       hInst,
+		w:           opts.W,
+		h:           opts.H,
+		resizable:   opts.Decorated,
+		fps:         30,
+		visible:     true,
+		alpha:       1,
+		fonts:       make(map[fontKey]uintptr),
+		brushes:     make(map[uint32]uintptr),
+		pens:        make(map[penKey]uintptr),
+		textSizes:   make(map[textSizeKey]textSizeVal),
+		arrowCursor: arrowCursor,
+		handCursor:  handCursor,
 	}
 	currentWindow = w
 
@@ -386,15 +590,30 @@ func (w *Window) createBuffers(width, height int) {
 
 	procSelectObject.Call(w.memDC, w.hBitmap)
 
-	w.graphics = gdipCreateFromHDC(w.memDC)
+	w.gdipBitmap, w.graphics = gdipCreateBitmapGraphics(width, height, bits)
 
 	w.w, w.h = width, height
 }
 
 func (w *Window) destroyBuffers() {
+	for col, brush := range w.brushes {
+		procGdipDeleteBrush.Call(brush)
+		delete(w.brushes, col)
+	}
+
+	for key, pen := range w.pens {
+		procGdipDeletePen.Call(pen)
+		delete(w.pens, key)
+	}
+
 	if w.graphics != 0 {
 		gdipDeleteGraphics(w.graphics)
 		w.graphics = 0
+	}
+
+	if w.gdipBitmap != 0 {
+		gdipDisposeImage(w.gdipBitmap)
+		w.gdipBitmap = 0
 	}
 
 	if w.hBitmap != 0 {
@@ -406,6 +625,30 @@ func (w *Window) destroyBuffers() {
 		procDeleteDC.Call(w.memDC)
 		w.memDC = 0
 	}
+}
+
+func (w *Window) resizeBuffers(width, height int) {
+	if w.graphics != 0 {
+		gdipDeleteGraphics(w.graphics)
+		w.graphics = 0
+	}
+
+	if w.gdipBitmap != 0 {
+		gdipDisposeImage(w.gdipBitmap)
+		w.gdipBitmap = 0
+	}
+
+	if w.hBitmap != 0 {
+		procDeleteObject.Call(w.hBitmap)
+		w.hBitmap = 0
+	}
+
+	if w.memDC != 0 {
+		procDeleteDC.Call(w.memDC)
+		w.memDC = 0
+	}
+
+	w.createBuffers(width, height)
 }
 
 func (w *Window) Size() (int, int) {
@@ -436,10 +679,12 @@ func (w *Window) Close() {
 }
 
 func (w *Window) Hide() {
+	w.visible = false
 	procShowWindow.Call(w.hwnd, swHide)
 }
 
 func (w *Window) Show() {
+	w.visible = true
 	procShowWindow.Call(w.hwnd, swShow)
 }
 
@@ -507,6 +752,7 @@ func (w *Window) pollEvents(in *Input) {
 	in.KeyLeft = false
 	in.KeyRight = false
 	in.HotkeyTriggered = false
+	in.ScrollDelta = 0
 
 	w.input = in
 
@@ -528,6 +774,20 @@ func (w *Window) SetFPS(fps int) {
 	}
 
 	w.fps = fps
+}
+
+func (w *Window) SetVSync(enabled bool) {
+	w.vsync = enabled
+}
+
+func (w *Window) SetAlpha(a float64) {
+	if a < 0 {
+		a = 0
+	}
+	if a > 1 {
+		a = 1
+	}
+	w.alpha = a
 }
 
 func (w *Window) Run(frame FrameFunc) {
@@ -552,20 +812,33 @@ func (w *Window) Run(frame FrameFunc) {
 			break
 		}
 
-		procUpdateLayeredWindow.Call(
-			w.hwnd, screenDC, 0, 0, w.memDC,
-			uintptr(unsafe.Pointer(&srcPt)), 0,
-			uintptr(unsafe.Pointer(&blend)), ulwAlpha,
-		)
+		if w.visible {
+			blend.SourceConstantAlpha = byte(w.alpha * 255)
+			ulwSize := point32{int32(w.w), int32(w.h)}
+			procUpdateLayeredWindow.Call(
+				w.hwnd, screenDC, 0, uintptr(unsafe.Pointer(&ulwSize)), w.memDC,
+				uintptr(unsafe.Pointer(&srcPt)), 0,
+				uintptr(unsafe.Pointer(&blend)), ulwAlpha,
+			)
+		}
 
-		frameDur := time.Second / time.Duration(w.fps)
-		if elapsed := time.Since(start); elapsed < frameDur {
-			time.Sleep(frameDur - elapsed)
+		if w.visible && w.vsync {
+			if r, _, _ := procDwmFlush.Call(); r != 0 {
+
+				time.Sleep(time.Millisecond)
+			}
+		} else {
+			frameDur := time.Second / time.Duration(w.fps)
+			if elapsed := time.Since(start); elapsed < frameDur {
+				time.Sleep(frameDur - elapsed)
+			}
 		}
 	}
 
+	w.DisableTray()
 	w.destroyBuffers()
 	procDestroyWindow.Call(w.hwnd)
+	procTimeEndPeriod.Call(1)
 }
 
 type fontKey struct {

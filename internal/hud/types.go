@@ -95,6 +95,11 @@ type Element struct {
 	Zones     []Zone    `json:"zones,omitempty"`
 
 	Thickness int `json:"thickness,omitempty"`
+
+	GlowEnabled   bool    `json:"glow_enabled,omitempty"`
+	GlowUseOwn    bool    `json:"glow_use_own_color,omitempty"`
+	GlowColor     Color   `json:"glow_color,omitempty"`
+	GlowIntensity float64 `json:"glow_intensity,omitempty"`
 }
 
 type Template struct {

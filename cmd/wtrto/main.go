@@ -24,6 +24,22 @@ import (
 
 const overlayChildArg = "--overlay-child"
 
+const releasesURL = "https://github.com/seneaLL/WTRTO/releases"
+
+func openURL(url string) {
+	var cmd *exec.Cmd
+	if runtime.GOOS == "windows" {
+		cmd = exec.Command("cmd", "/c", "start", "", url)
+	} else {
+		cmd = exec.Command("xdg-open", url)
+	}
+	_ = cmd.Start()
+}
+
+func init() {
+	runtime.LockOSThread()
+}
+
 var (
 	colorBg          = native.Color{R: 13, G: 15, B: 19, A: 255}
 	colorPanel       = native.Color{R: 22, G: 25, B: 32, A: 255}
@@ -67,24 +83,33 @@ func updateStatus() (bool, string) {
 
 const fpsUnlimited = -1
 
-var fpsOptions = []int{30, 60, 120, 144, 240, fpsUnlimited}
+var fpsOptions = []int{30, 60, 75, 90, 120, 144, 165, 180, 240, 360, fpsUnlimited}
 
 func fpsLabelFor(v int) string {
 	if v == fpsUnlimited {
-		return i18n.T("fps.unlimited")
+		return i18n.T("fps.vsync")
 	}
 
 	return fmt.Sprintf("%d FPS", v)
 }
 
-func nextFPS(v int) int {
+func fpsOptionLabels() []string {
+	labels := make([]string, len(fpsOptions))
+	for i, v := range fpsOptions {
+		labels[i] = fpsLabelFor(v)
+	}
+
+	return labels
+}
+
+func fpsIndex(v int) int {
 	for i, o := range fpsOptions {
 		if o == v {
-			return fpsOptions[(i+1)%len(fpsOptions)]
+			return i
 		}
 	}
 
-	return fpsOptions[0]
+	return 0
 }
 
 func main() {
@@ -159,6 +184,7 @@ func runOverlay(launcherPID int) {
 	var latestInd *telemetry.Indicators
 	var latestState telemetry.State
 	var latestMission telemetry.Mission
+	var latestMapInfo telemetry.MapInfo
 
 	go func() {
 		ticker := time.NewTicker(50 * time.Millisecond)
@@ -194,19 +220,24 @@ func runOverlay(launcherPID int) {
 			case <-ticker.C:
 				ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 				m, err := telClient.Mission(ctx)
+				mi, miErr := telClient.MapInfo(ctx)
 				cancel()
+				telMu.Lock()
 				if err == nil && m != nil {
-					telMu.Lock()
 					latestMission = *m
-					telMu.Unlock()
 				}
+				if miErr == nil && mi != nil {
+					latestMapInfo = *mi
+				}
+				telMu.Unlock()
 			}
 		}
 	}()
 
 	sw, sh := w.Size()
 	hudActive := false
-	debugFrame := overlay.NewHUD(sw, sh, sampler, func() bool { return debugOn }, func() bool { return !hideFPS }, func() bool { return hudActive })
+	renderActive := false
+	debugFrame := overlay.NewHUD(sw, sh, sampler, func() bool { return debugOn }, func() bool { return !hideFPS }, func() bool { return renderActive })
 
 	exitEditMode := func() {
 		editMode = false
@@ -216,25 +247,61 @@ func runOverlay(launcherPID int) {
 		config.Save(s)
 	}
 
+	const hudFadeSeconds = 0.25
+	var hudAlpha float64
+	var lastFrameAt time.Time
+	var lastValidValues hud.Values
+
 	w.Run(func(c *native.Canvas, in *native.Input) bool {
+		now := time.Now()
+		dt := 0.0
+		if !lastFrameAt.IsZero() {
+			dt = now.Sub(lastFrameAt).Seconds()
+		}
+		lastFrameAt = now
+
 		telMu.Lock()
 		ind, st := latestInd, latestState
 		mission := latestMission
+		mapInfo := latestMapInfo
 		telMu.Unlock()
 
 		values := tracker.Update(ind, st)
+		if values.Valid {
+			lastValidValues = values
+		}
 
 		wtPID, wtRunning := sampler.WTPID()
 		foreground := wtRunning && w.ActiveWindowPID() == wtPID
-		gameplayVisible := mission.Active() && foreground
+
+		gameplayVisible := mission.Active() && mapInfo.Valid && foreground
 
 		hudActive = editMode || gameplayVisible
-		if !editMode && !gameplayVisible {
-			values.Valid = false
+
+		target := 0.0
+		if hudActive {
+			target = 1.0
 		}
+		switch {
+		case dt <= 0:
+			hudAlpha = target
+		case target > hudAlpha:
+			hudAlpha = min(target, hudAlpha+dt/hudFadeSeconds)
+		case target < hudAlpha:
+			hudAlpha = max(target, hudAlpha-dt/hudFadeSeconds)
+		}
+		w.SetAlpha(hudAlpha)
+
+		renderActive = hudActive || hudAlpha > 0
+
+		renderValues := values
+		if !editMode && !gameplayVisible {
+			renderValues = lastValidValues
+		}
+		renderValues.Valid = renderActive
 
 		wasDragging := editState.Dragging != ""
-		hud.Draw(c, sw, sh, &tmpl, values, editMode, editState, in)
+		hud.Draw(c, sw, sh, &tmpl, renderValues, editMode, editState, in)
 		changed := wasDragging && editState.Dragging == ""
 
 		if editMode {
@@ -271,12 +338,14 @@ func runOverlay(launcherPID int) {
 }
 
 var (
-	overlayCmd  *exec.Cmd
-	overlayOn   bool
-	debugInfo   bool
-	fpsLimit    int
-	hudEditMode bool
-	hideFPS     bool
+	overlayCmd        *exec.Cmd
+	overlayOn         bool
+	debugInfo         bool
+	fpsLimit          int
+	fpsDropdownOpen   bool
+	fpsDropdownScroll int
+	hudEditMode       bool
+	hideFPS           bool
 
 	hotkeyKeysym    uint
 	hotkeyMods      uint
@@ -334,29 +403,56 @@ func formatHotkeyLabel(mods uint, keyRune rune, keysym uint) string {
 	return mp + "+" + key
 }
 
+var overlayMu sync.Mutex
+
 func startOverlay() {
-	cmd := exec.Command(os.Args[0], overlayChildArg, strconv.Itoa(os.Getpid()))
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	if err := cmd.Start(); err != nil {
+	overlayMu.Lock()
+	if overlayOn {
+		overlayMu.Unlock()
+
 		return
 	}
-	overlayCmd = cmd
 	overlayOn = true
+	overlayMu.Unlock()
 
 	go func() {
+		cmd := exec.Command(os.Args[0], overlayChildArg, strconv.Itoa(os.Getpid()))
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+
+		overlayMu.Lock()
+		err := cmd.Start()
+		if err != nil {
+			overlayOn = false
+			overlayMu.Unlock()
+
+			return
+		}
+		overlayCmd = cmd
+		overlayMu.Unlock()
+
 		cmd.Wait()
-		overlayOn = false
-		overlayCmd = nil
+
+		overlayMu.Lock()
+
+		if overlayCmd == cmd {
+			overlayCmd = nil
+			overlayOn = false
+		}
+		overlayMu.Unlock()
 	}()
 }
 
 func stopOverlay() {
-	if overlayCmd != nil && overlayCmd.Process != nil {
-		overlayCmd.Process.Kill()
-	}
+	overlayMu.Lock()
+	cmd := overlayCmd
 	overlayCmd = nil
 	overlayOn = false
+	overlayMu.Unlock()
+
+	if cmd != nil && cmd.Process != nil {
+		cmd.Process.Kill()
+	}
 }
 
 func toggleOverlay() {
@@ -387,20 +483,66 @@ func setLanguage(l i18n.Lang) {
 }
 
 const (
-	winW   = 520
-	winH   = 590
-	margin = 24
+	winW    = 520
+	winH    = 592
+	margin  = 24
+	headerH = 40
 )
 
-func launcherFrame(c *native.Canvas, in *native.Input) bool {
+func HeaderDragRegion(curW int) native.Rect {
+	return native.Rect{X: 0, Y: 0, W: curW - headerH*2, H: headerH}
+}
+
+func drawHeader(c *native.Canvas, in *native.Input, w *native.Window, curW int) {
+	c.FillRect(native.Rect{X: 0, Y: 0, W: curW, H: headerH}, colorPanel)
+	_, th := c.TextSize(i18n.T("app.title"), 14)
+	c.TextBold(16, (headerH+th)/2-2, colorText, 14, i18n.T("app.title"))
+
+	minimizeRect := native.Rect{X: curW - headerH*2, Y: 0, W: headerH, H: headerH}
+	minHover := minimizeRect.Contains(in.MouseX, in.MouseY)
+	minBg := colorPanel
+	if minHover {
+		minBg = colorPanelHover
+	}
+	c.FillRect(minimizeRect, minBg)
+	lineW := 12
+	lx := minimizeRect.X + (minimizeRect.W-lineW)/2
+	ly := minimizeRect.Y + minimizeRect.H/2 + 3
+	c.FillRect(native.Rect{X: lx, Y: ly, W: lineW, H: 2}, colorText)
+	if minHover && in.Released {
+		w.Hide()
+	}
+
+	closeRect := native.Rect{X: curW - headerH, Y: 0, W: headerH, H: headerH}
+	hover := closeRect.Contains(in.MouseX, in.MouseY)
+	closeBg := colorPanel
+	if hover {
+		closeBg = colorDanger
+	}
+	c.FillRect(closeRect, closeBg)
+	xw, xh := c.TextSize("x", 15)
+	c.Text(closeRect.X+(closeRect.W-xw)/2, closeRect.Y+(closeRect.H+xh)/2-2, colorText, 15, "x")
+	if hover && in.Released {
+		w.Close()
+	}
+}
+
+func launcherFrame(c *native.Canvas, in *native.Input, w *native.Window) bool {
+	originalIn := in
 	curW, curH := c.Size()
 	c.FillRect(native.Rect{X: 0, Y: 0, W: curW, H: curH}, colorBg)
+
+	y := margin
+	if !native.HasNativeTitleBar {
+		w.SetDragRegion(HeaderDragRegion(curW))
+		drawHeader(c, in, w, curW)
+		y = headerH + margin
+	}
 
 	contentW := curW - 2*margin
 	if contentW < 100 {
 		contentW = 100
 	}
-	y := margin
 
 	langCol := func(l i18n.Lang) native.Color {
 		if i18n.Current() == l {
@@ -417,8 +559,6 @@ func launcherFrame(c *native.Canvas, in *native.Input) bool {
 	}
 	y += 28 + 28
 
-	c.TextBold(margin, y+22, colorText, 24, i18n.T("app.title"))
-	y += 32
 	c.Text(margin, y+16, colorTextDim, 14, i18n.T("app.subtitle"))
 	y += 16 + 28
 
@@ -463,22 +603,40 @@ func launcherFrame(c *native.Canvas, in *native.Input) bool {
 	c.Text(margin+34, y, colorTextDim, 11, i18n.T("hud.edit_hint"))
 	y += 11 + 22
 
+	const hotkeyW = 220
+	const rowGap = 16
+	fpsW := contentW - hotkeyW - rowGap
+	if fpsW < 100 {
+		fpsW = 100
+	}
+	fpsRect := native.Rect{X: margin + hotkeyW + rowGap, Y: 0, W: fpsW, H: 34}
+
 	c.Text(margin, y+14, colorTextDim, 13, "Хоткей вкл/выкл оверлея")
+	c.Text(fpsRect.X, y+14, colorTextDim, 13, i18n.T("settings.fps_limit"))
 	y += 14 + 10
+
 	hkLabel := hotkeyLabel
 	if capturingHotkey {
 		hkLabel = "Нажмите комбинацию клавиш…"
 	}
-	if native.Button(c, in, native.Rect{X: margin, Y: y, W: 220, H: 34}, hkLabel, colorPanel, colorPanelHover, colorText, 13) {
+	if native.Button(c, in, native.Rect{X: margin, Y: y, W: hotkeyW, H: 34}, hkLabel, colorPanel, colorPanelHover, colorText, 13) {
 		capturingHotkey = true
 	}
-	y += 34 + 28
 
-	c.Text(margin, y+14, colorTextDim, 13, i18n.T("settings.fps_limit"))
-	y += 14 + 10
-	if native.Button(c, in, native.Rect{X: margin, Y: y, W: 150, H: 34}, fpsLabelFor(fpsLimit), colorPanel, colorPanelHover, colorText, 13) {
-		fpsLimit = nextFPS(fpsLimit)
-		saveState()
+	fpsRect.Y = y
+	if native.SelectBox(c, in, fpsRect, fpsLabelFor(fpsLimit), fpsDropdownOpen, colorPanel, colorPanelHover, colorText, 13) {
+		fpsDropdownOpen = !fpsDropdownOpen
+		if fpsDropdownOpen {
+			fpsDropdownScroll = 0
+		}
+	}
+	if fpsDropdownOpen {
+		listBounds := native.SelectListBounds(fpsRect, len(fpsOptions), curH)
+		if listBounds.Contains(in.MouseX, in.MouseY) {
+			masked := *in
+			masked.MouseDown, masked.Pressed, masked.Released, masked.ScrollDelta = false, false, false, 0
+			in = &masked
+		}
 	}
 	y += 34 + 28
 
@@ -497,8 +655,35 @@ func launcherFrame(c *native.Canvas, in *native.Input) bool {
 		if latestSHA != "" {
 			updText += " (" + latestSHA + ")"
 		}
-		uw, _ := c.TextSize(updText, 11)
-		c.Text(margin+contentW-bw-uw-12, buildY, colorAccent, 11, updText)
+		uw, uh := c.TextSize(updText, 11)
+		updY := buildY - uh - 6
+		updRect := native.Rect{X: margin + contentW - uw - 6, Y: updY - 3, W: uw + 6, H: uh + 6}
+
+		hovered := updRect.Contains(in.MouseX, in.MouseY)
+		w.SetHandCursor(hovered)
+
+		updCol := colorAccent
+		if hovered {
+			updCol = colorAccentHover
+			if in.Released {
+				openURL(releasesURL)
+			}
+		}
+		c.Text(margin+contentW-uw, updY, updCol, 11, updText)
+	}
+
+	if fpsDropdownOpen {
+		newIdx, selected := native.SelectList(c, originalIn, fpsRect, fpsOptionLabels(), fpsIndex(fpsLimit), &fpsDropdownScroll, curH, colorPanel, colorPanelHover, colorText, colorTextDim, 13)
+		switch {
+		case selected:
+			fpsLimit = fpsOptions[newIdx]
+			saveState()
+			fpsDropdownOpen = false
+
+		case originalIn.Released && !fpsRect.Contains(originalIn.MouseX, originalIn.MouseY) &&
+			!native.SelectListBounds(fpsRect, len(fpsOptions), curH).Contains(originalIn.MouseX, originalIn.MouseY):
+			fpsDropdownOpen = false
+		}
 	}
 
 	return true
@@ -534,8 +719,17 @@ func runLauncher() {
 		os.Exit(1)
 	}
 	w.SetFPS(30)
+	if !native.HasNativeTitleBar {
+		w.SetDragRegion(HeaderDragRegion(winW))
+	}
 	w.GrabHotkey(hotkeyKeysym, hotkeyMods)
 	defer w.UngrabHotkey()
+
+	w.EnableTray("WTRTO", i18n.T("tray.show"), i18n.T("tray.exit"),
+		func() { w.Show(); w.Focus() },
+		func() { w.Close() },
+	)
+	defer w.DisableTray()
 
 	stopWatch := make(chan struct{})
 	defer close(stopWatch)
@@ -562,7 +756,7 @@ func runLauncher() {
 			}
 		}
 
-		return launcherFrame(c, in)
+		return launcherFrame(c, in, w)
 	})
 
 	stopOverlay()

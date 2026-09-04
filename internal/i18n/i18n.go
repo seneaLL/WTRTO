@@ -42,10 +42,12 @@ var strings_ = map[Lang]map[string]string{
 		"debug.gpu_unavailable": "GPU: no data (nvidia-smi not found)",
 		"debug.wt_not_running":  "War Thunder: not running",
 		"settings.fps_limit":    "Overlay FPS limit",
-		"fps.unlimited":         "Unlimited",
+		"fps.vsync":             "VSync",
 		"hud.edit_mode":         "Edit HUD layout",
 		"hud.edit_hint":         "Drag elements in the overlay while enabled (aircraft only)",
 		"hud.edit_done":         "Done editing",
+		"tray.show":             "Show",
+		"tray.exit":             "Exit",
 	},
 	RU: {
 		"app.title":             "WTRTO",
@@ -70,10 +72,12 @@ var strings_ = map[Lang]map[string]string{
 		"debug.gpu_unavailable": "GPU: нет данных (nvidia-smi не найден)",
 		"debug.wt_not_running":  "War Thunder: не запущен",
 		"settings.fps_limit":    "Лимит FPS оверлея",
-		"fps.unlimited":         "Без лимита",
+		"fps.vsync":             "VSync",
 		"hud.edit_mode":         "Редактировать раскладку HUD",
 		"hud.edit_hint":         "Перетаскивай элементы в оверлее (только для самолётов)",
 		"hud.edit_done":         "Готово",
+		"tray.show":             "Показать",
+		"tray.exit":             "Выход",
 	},
 }
 

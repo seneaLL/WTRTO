@@ -31,6 +31,7 @@ type Input struct {
 	MouseDown      bool
 	Pressed        bool
 	Released       bool
+	ScrollDelta    int
 
 	KeyEvent      bool
 	KeyRune       rune

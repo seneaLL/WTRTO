@@ -137,17 +137,19 @@ func DrawPropertiesPanel(c *native.Canvas, in *native.Input, screenW, screenH in
 				edit.OpenDropdown = ""
 			} else {
 				edit.OpenDropdown = key
+				edit.DropdownScroll = 0
 			}
 		}
 		if edit.OpenDropdown == key {
 			pending = &dropdownField{rect: r, options: options, current: current, apply: apply}
 
-			listBounds := native.SelectListBounds(r, len(options))
+			listBounds := native.SelectListBounds(r, len(options), screenH)
 			if listBounds.Contains(in.MouseX, in.MouseY) {
 				masked := *in
 				masked.MouseDown = false
 				masked.Pressed = false
 				masked.Released = false
+				masked.ScrollDelta = 0
 				in = &masked
 			}
 		}
@@ -430,8 +432,8 @@ func DrawPropertiesPanel(c *native.Canvas, in *native.Input, screenW, screenH in
 		if readOnly {
 			msg = "Элементы недоступны для выбора в стандартном шаблоне"
 		}
-		c.Text(panelX+16, y+14, labelCol, 12, msg)
-		drawPendingDropdown(c, originalIn, edit, pending)
+		wrapped(msg, labelCol, 12)
+		drawPendingDropdown(c, originalIn, edit, pending, screenH)
 
 		return changed
 	}
@@ -445,7 +447,7 @@ func DrawPropertiesPanel(c *native.Canvas, in *native.Input, screenW, screenH in
 	}
 	if idx == -1 {
 		edit.Selected = ""
-		drawPendingDropdown(c, originalIn, edit, pending)
+		drawPendingDropdown(c, originalIn, edit, pending, screenH)
 
 		return changed
 	}
@@ -672,6 +674,58 @@ func DrawPropertiesPanel(c *native.Canvas, in *native.Input, screenW, screenH in
 	}
 	y += 88
 
+	glowRect := row(panelX, y)
+	if native.Checkbox(c, in, native.Rect{X: glowRect.X, Y: glowRect.Y, W: 20, H: 20}, e.GlowEnabled, fieldBorder, fieldFocus, textCol, 13, "Свечение") {
+		e.GlowEnabled = !e.GlowEnabled
+		if e.GlowEnabled {
+			if e.GlowIntensity == 0 {
+				e.GlowIntensity = 0.6
+			}
+			if !e.GlowUseOwn && e.GlowColor.A == 0 {
+				e.GlowUseOwn = true
+			}
+		}
+		changed = true
+	}
+	y += 34
+
+	if e.GlowEnabled {
+		ownRect := row(panelX, y)
+		if native.Checkbox(c, in, native.Rect{X: ownRect.X, Y: ownRect.Y, W: 20, H: 20}, e.GlowUseOwn, fieldBorder, fieldFocus, textCol, 13, "Цвет элемента") {
+			e.GlowUseOwn = !e.GlowUseOwn
+			if !e.GlowUseOwn && e.GlowColor.A == 0 {
+				e.GlowColor = Color{R: 255, G: 255, B: 255, A: 255}
+			}
+			changed = true
+		}
+		y += 34
+
+		if !e.GlowUseOwn {
+			label("Цвет свечения")
+			newGlowCol := native.ColorSliders(c, in, native.Rect{X: panelX + 16, Y: y, W: PanelWidth - 32, H: 72}, toNativeColor(e.GlowColor))
+			if newGlowCol != toNativeColor(e.GlowColor) {
+				e.GlowColor = Color{R: newGlowCol.R, G: newGlowCol.G, B: newGlowCol.B, A: newGlowCol.A}
+				changed = true
+			}
+			y += 88
+		}
+
+		label("Интенсивность свечения, %")
+		intensityPct := numberField("el_glow_intensity", row(panelX, y), e.GlowIntensity*100, 5, 0)
+		nv := intensityPct / 100
+		if nv < 0 {
+			nv = 0
+		}
+		if nv > 1 {
+			nv = 1
+		}
+		if nv != e.GlowIntensity {
+			e.GlowIntensity = nv
+			changed = true
+		}
+		y += 36
+	}
+
 	delRect := native.Rect{X: panelX + 16, Y: screenH - 60, W: PanelWidth - 32, H: 36}
 	if native.Button(c, in, delRect, "Удалить элемент", dangerBg, dangerHover, textCol, 14) {
 		tmpl.Elements = append(tmpl.Elements[:idx], tmpl.Elements[idx+1:]...)
@@ -681,16 +735,16 @@ func DrawPropertiesPanel(c *native.Canvas, in *native.Input, screenW, screenH in
 		changed = true
 	}
 
-	drawPendingDropdown(c, originalIn, edit, pending)
+	drawPendingDropdown(c, originalIn, edit, pending, screenH)
 
 	return changed
 }
 
-func drawPendingDropdown(c *native.Canvas, in *native.Input, edit *EditState, pending *dropdownField) {
+func drawPendingDropdown(c *native.Canvas, in *native.Input, edit *EditState, pending *dropdownField, screenH int) {
 	if pending == nil {
 		return
 	}
-	newIdx, selected := native.SelectList(c, in, pending.rect, pending.options, pending.current, fieldBg, btnHover, textCol, fieldBorder, 13)
+	newIdx, selected := native.SelectList(c, in, pending.rect, pending.options, pending.current, &edit.DropdownScroll, screenH, fieldBg, btnHover, textCol, fieldBorder, 13)
 	if selected {
 		pending.apply(newIdx)
 		edit.OpenDropdown = ""
