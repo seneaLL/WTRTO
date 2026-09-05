@@ -496,16 +496,16 @@ func toggleOverlay() {
 }
 
 func saveState() {
-	config.Save(config.State{
-		DebugInfo:    debugInfo,
-		Language:     string(i18n.Current()),
-		FPSLimit:     fpsLimit,
-		HUDEditMode:  hudEditMode,
-		HideFPS:      hideFPS,
-		HotkeyKeysym: hotkeyKeysym,
-		HotkeyMods:   hotkeyMods,
-		HotkeyLabel:  hotkeyLabel,
-	})
+	s := config.Load()
+	s.DebugInfo = debugInfo
+	s.Language = string(i18n.Current())
+	s.FPSLimit = fpsLimit
+	s.HUDEditMode = hudEditMode
+	s.HideFPS = hideFPS
+	s.HotkeyKeysym = hotkeyKeysym
+	s.HotkeyMods = hotkeyMods
+	s.HotkeyLabel = hotkeyLabel
+	config.Save(s)
 }
 
 func setLanguage(l i18n.Lang) {

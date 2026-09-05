@@ -18,6 +18,11 @@ type EditState struct {
 	OpenDropdown   string
 	DropdownScroll int
 
+	PanelTab string
+
+	ColorPickerFor  string
+	ColorPickerZone int
+
 	HideBackground bool
 
 	NumberEditBuf   string
@@ -306,21 +311,42 @@ func elementBounds(e Element, c *native.Canvas, screenW, screenH, x, y int) nati
 
 		return native.Rect{X: x - r, Y: y - r, W: r * 2, H: r * 2}
 	case KindTapeV:
+		length := int(e.Length * float64(screenH))
 		if e.Style == StyleArc {
-			r := int(e.Length * float64(screenH) / 2)
+			r := length / 2
 
 			return native.Rect{X: x - r - 40, Y: y - r, W: r*2 + 40, H: r * 2}
 		}
 
-		return native.Rect{X: x - 30, Y: y - 30, W: 60, H: 60}
+		fs := e.FontSize
+		if fs == 0 {
+			fs = 13
+		}
+		bw, _ := c.TextSize("9999", fs+2)
+		protrude := bw + 16 + 20
+		half := length / 2
+		if tapeVSign(e) > 0 {
+			return native.Rect{X: x - 4, Y: y - half, W: protrude, H: length}
+		}
+
+		return native.Rect{X: x - protrude, Y: y - half, W: protrude, H: length}
 	case KindTapeH:
+		length := int(e.Length * float64(screenW))
 		if e.Style == StyleArc {
-			r := int(e.Length * float64(screenW) / 2)
+			r := length / 2
 
 			return native.Rect{X: x - r, Y: y - r - 40, W: r * 2, H: r*2 + 40}
 		}
 
-		return native.Rect{X: x - 30, Y: y - 30, W: 60, H: 60}
+		fs := e.FontSize
+		if fs == 0 {
+			fs = 13
+		}
+		_, bh := c.TextSize("9999", fs+2)
+		above := bh + 22 + 10
+		half := length / 2
+
+		return native.Rect{X: x - half, Y: y - above, W: length, H: above + 16}
 	}
 	fs := e.FontSize
 	if fs == 0 {
@@ -363,6 +389,9 @@ func Draw(c *native.Canvas, screenW, screenH int, tmpl *Template, v Values, edit
 	}
 
 	readOnly := IsBuiltin(tmpl.Name)
+
+	elemBounds := make([]native.Rect, len(tmpl.Elements))
+	elemPos := make([][2]int, len(tmpl.Elements))
 
 	for i := range tmpl.Elements {
 		e := &tmpl.Elements[i]
@@ -424,24 +453,59 @@ func Draw(c *native.Canvas, screenW, screenH int, tmpl *Template, v Values, edit
 
 		if editMode {
 			b := elementBounds(*e, c, screenW, screenH, x, y)
+			elemBounds[i] = b
+			elemPos[i] = [2]int{x, y}
+
 			borderCol := native.Color{R: 255, G: 255, B: 255, A: 130}
+			borderWidth := 1
+			if edit.Selected == e.ID {
+				borderCol = native.Color{R: 90, G: 180, B: 255, A: 220}
+				borderWidth = 2
+			}
 			if edit.Dragging == e.ID {
 				borderCol = native.Color{R: 255, G: 210, B: 60, A: 230}
+				borderWidth = 2
 			}
-			c.StrokeRect(b, borderCol, 1)
+			c.StrokeRect(b, borderCol, borderWidth)
+		}
+	}
 
-			if !readOnly && b.Contains(in.MouseX, in.MouseY) && in.Pressed && edit.Dragging == "" {
-				edit.Dragging = e.ID
-				edit.OffsetX = in.MouseX - x
-				edit.OffsetY = in.MouseY - y
-				edit.StartX = x
-				edit.StartY = y
-				if edit.Selected != e.ID {
-					edit.Selected = e.ID
-					edit.FocusField = ""
-					edit.OpenDropdown = ""
+	if editMode && !readOnly && in.Pressed && edit.Dragging == "" {
+		var hits []int
+		for i := range tmpl.Elements {
+			if elemBounds[i].Contains(in.MouseX, in.MouseY) {
+				hits = append(hits, i)
+			}
+		}
+
+		if len(hits) > 0 {
+			pick := hits[len(hits)-1]
+			if in.KeyMods&native.ModCtrl != 0 && edit.Selected != "" {
+				for pos := len(hits) - 1; pos >= 0; pos-- {
+					if tmpl.Elements[hits[pos]].ID == edit.Selected {
+						next := pos - 1
+						if next < 0 {
+							next = len(hits) - 1
+						}
+						pick = hits[next]
+
+						break
+					}
 				}
 			}
+
+			e := &tmpl.Elements[pick]
+			edit.Dragging = e.ID
+			edit.OffsetX = in.MouseX - elemPos[pick][0]
+			edit.OffsetY = in.MouseY - elemPos[pick][1]
+			edit.StartX = elemPos[pick][0]
+			edit.StartY = elemPos[pick][1]
+			if edit.Selected != e.ID {
+				edit.Selected = e.ID
+				edit.FocusField = ""
+				edit.OpenDropdown = ""
+			}
+			edit.PanelTab = "element"
 		}
 	}
 

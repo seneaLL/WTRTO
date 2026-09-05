@@ -13,19 +13,21 @@ import (
 )
 
 var (
-	panelBg     = native.Color{R: 18, G: 20, B: 24, A: 235}
-	panelBorder = native.Color{R: 90, G: 96, B: 108, A: 255}
-	fieldBg     = native.Color{R: 30, G: 32, B: 38, A: 255}
-	fieldBorder = native.Color{R: 70, G: 74, B: 84, A: 255}
-	fieldFocus  = native.Color{R: 68, G: 224, B: 140, A: 255}
-	btnBg       = native.Color{R: 46, G: 50, B: 58, A: 255}
-	btnHover    = native.Color{R: 62, G: 66, B: 76, A: 255}
-	dangerBg    = native.Color{R: 140, G: 40, B: 40, A: 255}
-	dangerHover = native.Color{R: 170, G: 55, B: 55, A: 255}
-	labelCol    = native.Color{R: 200, G: 204, B: 210, A: 255}
-	textCol     = native.Color{R: 235, G: 238, B: 242, A: 255}
-	okCol       = native.Color{R: 120, G: 230, B: 140, A: 255}
-	errCol      = native.Color{R: 235, G: 110, B: 100, A: 255}
+	panelBg      = native.Color{R: 18, G: 20, B: 24, A: 235}
+	panelBorder  = native.Color{R: 90, G: 96, B: 108, A: 255}
+	fieldBg      = native.Color{R: 30, G: 32, B: 38, A: 255}
+	fieldBorder  = native.Color{R: 70, G: 74, B: 84, A: 255}
+	fieldFocus   = native.Color{R: 68, G: 224, B: 140, A: 255}
+	btnBg        = native.Color{R: 46, G: 50, B: 58, A: 255}
+	btnHover     = native.Color{R: 62, G: 66, B: 76, A: 255}
+	dangerBg     = native.Color{R: 140, G: 40, B: 40, A: 255}
+	dangerHover  = native.Color{R: 170, G: 55, B: 55, A: 255}
+	labelCol     = native.Color{R: 200, G: 204, B: 210, A: 255}
+	textCol      = native.Color{R: 235, G: 238, B: 242, A: 255}
+	okCol        = native.Color{R: 120, G: 230, B: 140, A: 255}
+	errCol       = native.Color{R: 235, G: 110, B: 100, A: 255}
+	tabActiveCol = native.Color{R: 68, G: 224, B: 140, A: 255}
+	tooltipBg    = native.Color{R: 10, G: 12, B: 15, A: 235}
 )
 
 func newElement() Element {
@@ -93,6 +95,8 @@ func wrapText(c *native.Canvas, s string, fontSize, maxWidth int) []string {
 	return append(lines, cur)
 }
 
+const panelGroupGap = 10
+
 func row(panelX, y int) native.Rect {
 	return native.Rect{X: panelX + 16, Y: y, W: PanelWidth - 32, H: 28}
 }
@@ -104,29 +108,56 @@ type dropdownField struct {
 	apply   func(int)
 }
 
-func DrawPropertiesPanel(c *native.Canvas, in *native.Input, screenW, screenH int, tmpl *Template, edit *EditState) bool {
+type tooltipInfo struct {
+	rect native.Rect
+	text string
+}
 
+func drawTooltip(c *native.Canvas, t tooltipInfo, screenW, screenH int) {
+	fontSize := 12
+	tw, th := c.TextSize(t.text, fontSize)
+	w, h := tw+16, th+10
+	x := t.rect.X + t.rect.W/2 - w/2
+	y := t.rect.Y - h - 6
+	if y < 0 {
+		y = t.rect.Y + t.rect.H + 6
+	}
+	if y+h > screenH {
+		y = screenH - h
+	}
+	if x < 0 {
+		x = 0
+	}
+	if x+w > screenW {
+		x = screenW - w
+	}
+	box := native.Rect{X: x, Y: y, W: w, H: h}
+	c.FillRoundedRect(box, native.RadiusSmall, tooltipBg)
+	c.StrokeRoundedRect(box, native.RadiusSmall, fieldBorder, 1)
+	c.TextCentered(box, textCol, fontSize, t.text)
+}
+
+func DrawPropertiesPanel(c *native.Canvas, in *native.Input, screenW, screenH int, tmpl *Template, edit *EditState) bool {
 	originalIn := in
 	readOnly := IsBuiltin(tmpl.Name)
 	changed := false
-
-	if !readOnly {
-		addRect := native.Rect{X: 16, Y: 16, W: 150, H: 34}
-		if native.Button(c, in, addRect, "+ Добавить элемент", btnBg, btnHover, textCol, 14) {
-			e := newElement()
-			tmpl.Elements = append(tmpl.Elements, e)
-			edit.Selected = e.ID
-			edit.FocusField = ""
-			edit.OpenDropdown = ""
-			changed = true
-		}
-	}
 
 	panelX := screenW - PanelWidth
 	c.FillRect(native.Rect{X: panelX, Y: 0, W: PanelWidth, H: screenH}, panelBg)
 	c.StrokeRect(native.Rect{X: panelX, Y: 0, W: PanelWidth, H: screenH}, panelBorder, 1)
 
-	var pending *dropdownField
+	var pendingDropdown *dropdownField
+	var tooltip *tooltipInfo
+
+	iconButton := func(r native.Rect, icon, tip string, bg, bgHover native.Color) bool {
+		clicked, hover := native.IconButton(c, in, r, icon, bg, bgHover, textCol, 15)
+		if hover {
+			tooltip = &tooltipInfo{rect: r, text: tip}
+		}
+
+		return clicked
+	}
+
 	selectField := func(key string, r native.Rect, options []string, current int, apply func(int)) {
 		cur := "-"
 		if current >= 0 && current < len(options) {
@@ -141,7 +172,7 @@ func DrawPropertiesPanel(c *native.Canvas, in *native.Input, screenW, screenH in
 			}
 		}
 		if edit.OpenDropdown == key {
-			pending = &dropdownField{rect: r, options: options, current: current, apply: apply}
+			pendingDropdown = &dropdownField{rect: r, options: options, current: current, apply: apply}
 
 			listBounds := native.SelectListBounds(r, len(options), screenH)
 			if listBounds.Contains(in.MouseX, in.MouseY) {
@@ -227,9 +258,34 @@ func DrawPropertiesPanel(c *native.Canvas, in *native.Input, screenW, screenH in
 		return nv, submitted
 	}
 
-	y := 20
-	c.TextBold(panelX+16, y+18, textCol, 15, "Шаблоны")
-	y += 34
+	y := 16
+
+	tabW := (PanelWidth - 32) / 2
+	tmplTabRect := native.Rect{X: panelX + 16, Y: y, W: tabW, H: 32}
+	elemTabRect := native.Rect{X: tmplTabRect.X + tabW, Y: y, W: PanelWidth - 32 - tabW, H: 32}
+	drawTab := func(r native.Rect, label string, active bool) bool {
+		hover := r.Contains(in.MouseX, in.MouseY)
+		col := labelCol
+		if active || hover {
+			col = textCol
+		}
+		c.TextCentered(r, col, 14, label)
+		underline := native.Rect{X: r.X, Y: r.Y + r.H - 2, W: r.W, H: 2}
+		underlineCol := panelBorder
+		if active {
+			underlineCol = tabActiveCol
+		}
+		c.FillRect(underline, underlineCol)
+
+		return hover && in.Released
+	}
+	if drawTab(tmplTabRect, "Шаблон", edit.PanelTab != "element") {
+		edit.PanelTab = "template"
+	}
+	if drawTab(elemTabRect, "Элемент", edit.PanelTab == "element") {
+		edit.PanelTab = "element"
+	}
+	y += 44
 
 	textWidth := PanelWidth - 32
 	wrapped := func(s string, col native.Color, fontSize int) {
@@ -242,190 +298,219 @@ func DrawPropertiesPanel(c *native.Canvas, in *native.Input, screenW, screenH in
 		wrapped(s, labelCol, 12)
 	}
 
-	label("Активный шаблон")
-	names, _ := List()
-	tidx := indexOf(names, tmpl.Name)
-	selectField("template", row(panelX, y), names, tidx, func(i int) {
-		loaded, err := Load(names[i])
-		if err != nil {
-			edit.StatusMsg, edit.StatusOK = "Не удалось загрузить шаблон", false
-
-			return
+	pairRow := func(leftLabel, rightLabel string, leftFrac float64) (native.Rect, native.Rect) {
+		full := row(panelX, y)
+		leftW := int(float64(full.W-8) * leftFrac)
+		leftR := native.Rect{X: full.X, Y: y + 17, W: leftW, H: 28}
+		rightR := native.Rect{X: full.X + leftW + 8, Y: y + 17, W: full.W - leftW - 8, H: 28}
+		if leftLabel != "" {
+			c.Text(leftR.X, y+12, labelCol, 12, leftLabel)
 		}
-		*tmpl = loaded
-		edit.Selected = ""
-		edit.FocusField = ""
-		edit.ShareCode = ""
-		s := config.Load()
-		s.ActiveTemplate = loaded.Name
-		config.Save(s)
-		edit.StatusMsg, edit.StatusOK = "Загружен: "+loaded.Name, true
-	})
-	y += 34
+		if rightLabel != "" {
+			c.Text(rightR.X, y+12, labelCol, 12, rightLabel)
+		}
+		y += 17
 
-	bgRect := native.Rect{X: panelX + 16, Y: y, W: 20, H: 20}
-	if native.Checkbox(c, in, bgRect, !edit.HideBackground, fieldBorder, fieldFocus, textCol, 13, "Закрашивать фон") {
-		edit.HideBackground = !edit.HideBackground
-	}
-	y += 34
-
-	if readOnly {
-		wrapped("Стандартный шаблон - только просмотр. Сохраните копию ниже, чтобы редактировать.", errCol, 11)
-		y += 6
+		return leftR, rightR
 	}
 
-	nameRect := native.Rect{X: panelX + 16, Y: y, W: PanelWidth - 32 - 92, H: 28}
-	nv, submitted := textField("newname", nameRect, edit.NewTemplateName, 13)
-	if nv != edit.NewTemplateName {
-		edit.NewTemplateName = nv
+	finish := func() bool {
+		drawPendingDropdown(c, originalIn, edit, pendingDropdown, screenH)
+		if tooltip != nil {
+			drawTooltip(c, *tooltip, screenW, screenH)
+		}
+
+		return changed
 	}
-	saveAsRect := native.Rect{X: nameRect.X + nameRect.W + 8, Y: y, W: 84, H: 28}
-	saveAsClicked := native.Button(c, in, saveAsRect, "Сохранить", btnBg, btnHover, textCol, 12)
-	if submitted || saveAsClicked {
-		name := edit.NewTemplateName
-		if name == "" {
-			edit.StatusMsg, edit.StatusOK = "Введите имя шаблона", false
-		} else if IsBuiltin(name) {
-			edit.StatusMsg, edit.StatusOK = "Это имя зарезервировано под стандартный шаблон, выберите другое", false
-		} else {
-			fork := Template{Name: name, Army: tmpl.Army, Elements: append([]Element(nil), tmpl.Elements...)}
-			if err := Save(fork); err != nil {
-				edit.StatusMsg, edit.StatusOK = "Ошибка сохранения: "+err.Error(), false
-			} else {
-				*tmpl = fork
-				s := config.Load()
-				s.ActiveTemplate = fork.Name
-				config.Save(s)
-				edit.StatusMsg, edit.StatusOK = "Сохранено как: "+fork.Name, true
-				edit.NewTemplateName = ""
-				edit.FocusField = ""
-				edit.ShareCode = ""
+
+	if edit.PanelTab != "element" {
+		label("Активный шаблон")
+		names, _ := List()
+		tidx := indexOf(names, tmpl.Name)
+		selectField("template", row(panelX, y), names, tidx, func(i int) {
+			loaded, err := Load(names[i])
+			if err != nil {
+				edit.StatusMsg, edit.StatusOK = "Не удалось загрузить шаблон", false
+
+				return
 			}
-		}
-	}
-	y += 36
+			*tmpl = loaded
+			edit.Selected = ""
+			edit.FocusField = ""
+			edit.ShareCode = ""
+			s := config.Load()
+			s.ActiveTemplate = loaded.Name
+			config.Save(s)
+			edit.StatusMsg, edit.StatusOK = "Загружен: "+loaded.Name, true
+		})
+		y += 34
 
-	if readOnly {
-		newBlankRect := row(panelX, y)
-		if native.Button(c, in, newBlankRect, "Новый пустой шаблон", btnBg, btnHover, textCol, 13) {
-			blank := Template{Name: fmt.Sprintf("Новый шаблон %d", time.Now().Unix()%100000), Army: "air"}
-			Save(blank)
-			*tmpl = blank
-			edit.Selected = ""
-			edit.FocusField = ""
-			edit.ShareCode = ""
-			s := config.Load()
-			s.ActiveTemplate = blank.Name
-			config.Save(s)
-			edit.StatusMsg, edit.StatusOK = "Создан: "+blank.Name, true
+		bgRect := native.Rect{X: panelX + 16, Y: y, W: 20, H: 20}
+		if native.Checkbox(c, in, bgRect, !edit.HideBackground, fieldBorder, fieldFocus, textCol, 13, "Закрашивать фон") {
+			edit.HideBackground = !edit.HideBackground
 		}
-	} else {
-		newBlankRect := native.Rect{X: panelX + 16, Y: y, W: (PanelWidth-32)/2 - 4, H: 30}
-		deleteRect := native.Rect{X: newBlankRect.X + newBlankRect.W + 8, Y: y, W: (PanelWidth-32)/2 - 4, H: 30}
-		if native.Button(c, in, newBlankRect, "Новый пустой", btnBg, btnHover, textCol, 13) {
-			blank := Template{Name: fmt.Sprintf("Новый шаблон %d", time.Now().Unix()%100000), Army: "air"}
-			Save(blank)
-			*tmpl = blank
-			edit.Selected = ""
-			edit.FocusField = ""
-			edit.ShareCode = ""
-			s := config.Load()
-			s.ActiveTemplate = blank.Name
-			config.Save(s)
-			edit.StatusMsg, edit.StatusOK = "Создан: "+blank.Name, true
+		y += 34 + panelGroupGap
+
+		if readOnly {
+			wrapped("Стандартный шаблон - только просмотр. Сохраните копию ниже, чтобы редактировать.", errCol, 11)
+			y += 6
 		}
-		if native.Button(c, in, deleteRect, "Удалить шаблон", dangerBg, dangerHover, textCol, 13) {
-			deletedName := tmpl.Name
-			if err := Delete(deletedName); err != nil {
-				edit.StatusMsg, edit.StatusOK = "Ошибка удаления: "+err.Error(), false
+
+		label("Сохранить как")
+		nameRect := native.Rect{X: panelX + 16, Y: y, W: PanelWidth - 32 - 44, H: 28}
+		nv, submitted := textField("newname", nameRect, edit.NewTemplateName, 13)
+		if nv != edit.NewTemplateName {
+			edit.NewTemplateName = nv
+		}
+		saveAsRect := native.Rect{X: nameRect.X + nameRect.W + 8, Y: y, W: 36, H: 28}
+		saveAsClicked := iconButton(saveAsRect, "save", "Сохранить как копию шаблона", btnBg, btnHover)
+		if submitted || saveAsClicked {
+			name := edit.NewTemplateName
+			if name == "" {
+				edit.StatusMsg, edit.StatusOK = "Введите имя шаблона", false
+			} else if IsBuiltin(name) {
+				edit.StatusMsg, edit.StatusOK = "Это имя зарезервировано под стандартный шаблон, выберите другое", false
 			} else {
-				fallback, ferr := Load(DefaultAirTemplate().Name)
-				if ferr != nil {
-					fallback = EnsureDefault(DefaultAirTemplate())
+				fork := Template{Name: name, Army: tmpl.Army, Elements: append([]Element(nil), tmpl.Elements...)}
+				if err := Save(fork); err != nil {
+					edit.StatusMsg, edit.StatusOK = "Ошибка сохранения: "+err.Error(), false
+				} else {
+					*tmpl = fork
+					s := config.Load()
+					s.ActiveTemplate = fork.Name
+					config.Save(s)
+					edit.StatusMsg, edit.StatusOK = "Сохранено как: "+fork.Name, true
+					edit.NewTemplateName = ""
+					edit.FocusField = ""
+					edit.ShareCode = ""
 				}
-				*tmpl = fallback
-				edit.Selected = ""
-				edit.FocusField = ""
-				edit.OpenDropdown = ""
-				edit.ShareCode = ""
-				s := config.Load()
-				s.ActiveTemplate = fallback.Name
-				config.Save(s)
-				edit.StatusMsg, edit.StatusOK = "Удалён: "+deletedName, true
 			}
 		}
-	}
-	y += 36
+		y += 40 + panelGroupGap
 
-	exportRect := native.Rect{X: panelX + 16, Y: y, W: (PanelWidth-32)/2 - 4, H: 30}
-	importRect := native.Rect{X: exportRect.X + exportRect.W + 8, Y: y, W: (PanelWidth-32)/2 - 4, H: 30}
+		tmplBtnCount := 3
+		if !readOnly {
+			tmplBtnCount = 4
+		}
+		tmplBtnH := 40
+		tmplBtnGap := 8
+		tmplBtnW := (PanelWidth - 32 - (tmplBtnCount-1)*tmplBtnGap) / tmplBtnCount
+		tmplBtnX := func(i int) int { return panelX + 16 + i*(tmplBtnW+tmplBtnGap) }
 
-	if native.Button(c, in, exportRect, "Экспорт", btnBg, btnHover, textCol, 13) {
-		edit.PendingDialog = "export"
-	}
+		newBlankRect := native.Rect{X: tmplBtnX(0), Y: y, W: tmplBtnW, H: tmplBtnH}
+		if iconButton(newBlankRect, "plus", "Новый пустой шаблон", btnBg, btnHover) {
+			blank := Template{Name: fmt.Sprintf("Новый шаблон %d", time.Now().Unix()%100000), Army: "air"}
+			Save(blank)
+			*tmpl = blank
+			edit.Selected = ""
+			edit.FocusField = ""
+			edit.ShareCode = ""
+			s := config.Load()
+			s.ActiveTemplate = blank.Name
+			config.Save(s)
+			edit.StatusMsg, edit.StatusOK = "Создан: "+blank.Name, true
+		}
+		exportRect := native.Rect{X: tmplBtnX(1), Y: y, W: tmplBtnW, H: tmplBtnH}
+		if iconButton(exportRect, "export", "Экспорт шаблона в файл", btnBg, btnHover) {
+			edit.PendingDialog = "export"
+		}
+		importRect := native.Rect{X: tmplBtnX(2), Y: y, W: tmplBtnW, H: tmplBtnH}
+		if iconButton(importRect, "import", "Импорт шаблона из файла", btnBg, btnHover) {
+			edit.PendingDialog = "import"
+		}
+		if !readOnly {
+			deleteTmplRect := native.Rect{X: tmplBtnX(3), Y: y, W: tmplBtnW, H: tmplBtnH}
+			if iconButton(deleteTmplRect, "trash", "Удалить шаблон", dangerBg, dangerHover) {
+				deletedName := tmpl.Name
+				if err := Delete(deletedName); err != nil {
+					edit.StatusMsg, edit.StatusOK = "Ошибка удаления: "+err.Error(), false
+				} else {
+					fallback, ferr := Load(DefaultAirTemplate().Name)
+					if ferr != nil {
+						fallback = EnsureDefault(DefaultAirTemplate())
+					}
+					*tmpl = fallback
+					edit.Selected = ""
+					edit.FocusField = ""
+					edit.OpenDropdown = ""
+					edit.ShareCode = ""
+					s := config.Load()
+					s.ActiveTemplate = fallback.Name
+					config.Save(s)
+					edit.StatusMsg, edit.StatusOK = "Удалён: "+deletedName, true
+				}
+			}
+		}
+		y += 50 + panelGroupGap
 
-	if native.Button(c, in, importRect, "Импорт", btnBg, btnHover, textCol, 13) {
-		edit.PendingDialog = "import"
-	}
-	y += 38
-
-	label("Код шаблона")
-	codeRect := native.Rect{X: panelX + 16, Y: y, W: PanelWidth - 32, H: 28}
-	cv, _ := textField("sharecode", codeRect, edit.ShareCode, 11)
-	if cv != edit.ShareCode {
-		edit.ShareCode = cv
-	}
-	y += 34
-
-	shareRect := native.Rect{X: panelX + 16, Y: y, W: (PanelWidth-32)/2 - 4, H: 30}
-	loadRect := native.Rect{X: shareRect.X + shareRect.W + 8, Y: y, W: (PanelWidth-32)/2 - 4, H: 30}
-	if native.Button(c, in, shareRect, "Поделиться", btnBg, btnHover, textCol, 13) {
-		code, err := EncodeShareCode(*tmpl)
-		if err != nil {
-			edit.StatusMsg, edit.StatusOK = "Ошибка генерации кода: "+err.Error(), false
-		} else {
-			edit.ShareCode = code
-			if cerr := clipboard.Copy(code); cerr != nil {
-				edit.StatusMsg, edit.StatusOK = "Код готов (скопируйте вручную из поля выше - буфер обмена недоступен)", true
+		label("Код шаблона")
+		codeRect := native.Rect{X: panelX + 16, Y: y, W: PanelWidth - 32 - 92, H: 28}
+		cv, _ := textField("sharecode", codeRect, edit.ShareCode, 11)
+		if cv != edit.ShareCode {
+			edit.ShareCode = cv
+		}
+		shareRect := native.Rect{X: codeRect.X + codeRect.W + 8, Y: y, W: 40, H: 28}
+		if iconButton(shareRect, "clipboard", "Скопировать код шаблона в буфер обмена", btnBg, btnHover) {
+			code, err := EncodeShareCode(*tmpl)
+			if err != nil {
+				edit.StatusMsg, edit.StatusOK = "Ошибка генерации кода: "+err.Error(), false
 			} else {
-				edit.StatusMsg, edit.StatusOK = "Код скопирован в буфер обмена", true
+				edit.ShareCode = code
+				if cerr := clipboard.Copy(code); cerr != nil {
+					edit.StatusMsg, edit.StatusOK = "Код готов (скопируйте вручную из поля выше - буфер обмена недоступен)", true
+				} else {
+					edit.StatusMsg, edit.StatusOK = "Код скопирован в буфер обмена", true
+				}
 			}
 		}
-	}
-	if native.Button(c, in, loadRect, "Загрузить", btnBg, btnHover, textCol, 13) {
-		if edit.ShareCode == "" {
-			edit.StatusMsg, edit.StatusOK = "Вставьте код в поле выше", false
-		} else if loaded, err := DecodeShareCode(edit.ShareCode); err != nil {
-			edit.StatusMsg, edit.StatusOK = err.Error(), false
-		} else {
-			loaded = deconflictBuiltinName(loaded)
-			if err := Save(loaded); err != nil {
-				edit.StatusMsg, edit.StatusOK = "Ошибка сохранения: "+err.Error(), false
+		loadRect := native.Rect{X: shareRect.X + shareRect.W + 4, Y: y, W: 40, H: 28}
+		if iconButton(loadRect, "download", "Загрузить шаблон из кода выше", btnBg, btnHover) {
+			if edit.ShareCode == "" {
+				edit.StatusMsg, edit.StatusOK = "Вставьте код в поле выше", false
+			} else if loaded, err := DecodeShareCode(edit.ShareCode); err != nil {
+				edit.StatusMsg, edit.StatusOK = err.Error(), false
 			} else {
-				*tmpl = loaded
-				edit.Selected = ""
-				edit.FocusField = ""
-				s := config.Load()
-				s.ActiveTemplate = loaded.Name
-				config.Save(s)
-				edit.StatusMsg, edit.StatusOK = "Загружено по коду: "+loaded.Name, true
+				loaded = deconflictBuiltinName(loaded)
+				if err := Save(loaded); err != nil {
+					edit.StatusMsg, edit.StatusOK = "Ошибка сохранения: "+err.Error(), false
+				} else {
+					*tmpl = loaded
+					edit.Selected = ""
+					edit.FocusField = ""
+					s := config.Load()
+					s.ActiveTemplate = loaded.Name
+					config.Save(s)
+					edit.StatusMsg, edit.StatusOK = "Загружено по коду: "+loaded.Name, true
+				}
 			}
 		}
-	}
-	y += 38
+		y += 38
 
-	if edit.StatusMsg != "" {
-		col := okCol
-		if !edit.StatusOK {
-			col = errCol
+		if edit.StatusMsg != "" {
+			col := okCol
+			if !edit.StatusOK {
+				col = errCol
+			}
+			wrapped(edit.StatusMsg, col, 12)
 		}
-		wrapped(edit.StatusMsg, col, 12)
-		y += 8
+
+		return finish()
 	}
 
-	y += 8
-	c.Line([]native.Point{{X: float64(panelX + 16), Y: float64(y)}, {X: float64(panelX + PanelWidth - 16), Y: float64(y)}}, panelBorder, 1)
-	y += 16
+	if !readOnly {
+		addRect := row(panelX, y)
+		if native.Button(c, in, addRect, "+ Добавить элемент", btnBg, btnHover, textCol, 14) {
+			e := newElement()
+			tmpl.Elements = append(tmpl.Elements, e)
+			edit.Selected = e.ID
+			edit.FocusField = ""
+			edit.OpenDropdown = ""
+			changed = true
+		}
+		y += 40
+		c.Line([]native.Point{{X: float64(panelX + 16), Y: float64(y)}, {X: float64(panelX + PanelWidth - 16), Y: float64(y)}}, panelBorder, 1)
+		y += 16
+	}
 
 	if edit.Selected == "" {
 		msg := "Выберите элемент на экране для редактирования"
@@ -433,9 +518,8 @@ func DrawPropertiesPanel(c *native.Canvas, in *native.Input, screenW, screenH in
 			msg = "Элементы недоступны для выбора в стандартном шаблоне"
 		}
 		wrapped(msg, labelCol, 12)
-		drawPendingDropdown(c, originalIn, edit, pending, screenH)
 
-		return changed
+		return finish()
 	}
 
 	idx := -1
@@ -447,27 +531,23 @@ func DrawPropertiesPanel(c *native.Canvas, in *native.Input, screenW, screenH in
 	}
 	if idx == -1 {
 		edit.Selected = ""
-		drawPendingDropdown(c, originalIn, edit, pending, screenH)
 
-		return changed
+		return finish()
 	}
 	e := &tmpl.Elements[idx]
 
-	c.TextBold(panelX+16, y+18, textCol, 15, "Свойства элемента")
-	y += 36
-
 	if !readOnly {
-		centerHRect := native.Rect{X: panelX + 16, Y: y, W: (PanelWidth-32)/2 - 4, H: 28}
-		centerVRect := native.Rect{X: centerHRect.X + centerHRect.W + 8, Y: y, W: (PanelWidth-32)/2 - 4, H: 28}
-		if native.Button(c, in, centerHRect, "По центру X", btnBg, btnHover, textCol, 12) {
+		centerHRect := native.Rect{X: panelX + 16, Y: y, W: 40, H: 28}
+		centerVRect := native.Rect{X: centerHRect.X + centerHRect.W + 8, Y: y, W: 40, H: 28}
+		if iconButton(centerHRect, "align-h", "Выровнять по центру по горизонтали", btnBg, btnHover) {
 			e.X = 0.5
 			changed = true
 		}
-		if native.Button(c, in, centerVRect, "По центру Y", btnBg, btnHover, textCol, 12) {
+		if iconButton(centerVRect, "align-v", "Выровнять по центру по вертикали", btnBg, btnHover) {
 			e.Y = 0.5
 			changed = true
 		}
-		y += 34
+		y += 34 + panelGroupGap
 	}
 
 	label("Тип")
@@ -479,7 +559,7 @@ func DrawPropertiesPanel(c *native.Canvas, in *native.Input, screenW, screenH in
 			changed = true
 		}
 	})
-	y += 36
+	y += 36 + panelGroupGap
 
 	if e.Kind != KindHorizon {
 		label("Величина")
@@ -501,12 +581,12 @@ func DrawPropertiesPanel(c *native.Canvas, in *native.Input, screenW, screenH in
 			}
 			y += 34
 		}
+		y += panelGroupGap
 	}
 
 	if e.Kind == KindText {
-		label("Подпись")
-		r := row(panelX, y)
-		nv, submitted := textField("label", r, e.Label, 13)
+		labelR, unitR := pairRow("Подпись", "Единицы", 0.62)
+		nv, submitted := textField("label", labelR, e.Label, 13)
 		if submitted {
 			edit.FocusField = ""
 		}
@@ -514,11 +594,7 @@ func DrawPropertiesPanel(c *native.Canvas, in *native.Input, screenW, screenH in
 			e.Label = nv
 			changed = true
 		}
-		y += 36
-
-		label("Единицы")
-		r = row(panelX, y)
-		nv, submitted = textField("unit", r, e.Unit, 13)
+		nv, submitted = textField("unit", unitR, e.Unit, 13)
 		if submitted {
 			edit.FocusField = ""
 		}
@@ -528,56 +604,81 @@ func DrawPropertiesPanel(c *native.Canvas, in *native.Input, screenW, screenH in
 		}
 		y += 36
 
-		label("Точность (знаков)")
-		nv2 := numberField("el_precision", row(panelX, y), float64(e.Precision), 1, 0)
+		precR, boldR := pairRow("Точность", "", 0.4)
+		nv2 := numberField("el_precision", precR, float64(e.Precision), 1, 0)
 		if int(nv2) != e.Precision {
 			e.Precision = int(nv2)
 			changed = true
 		}
-		y += 36
-
-		boldRect := row(panelX, y)
-		if native.Checkbox(c, in, native.Rect{X: boldRect.X, Y: boldRect.Y, W: 20, H: 20}, e.Bold, fieldBorder, fieldFocus, textCol, 13, "Жирный") {
+		if native.Checkbox(c, in, native.Rect{X: boldR.X, Y: boldR.Y, W: 20, H: 20}, e.Bold, fieldBorder, fieldFocus, textCol, 13, "Жирный") {
 			e.Bold = !e.Bold
 			changed = true
 		}
-		y += 36
+		y += 36 + panelGroupGap
 	}
 
 	if e.Kind != KindHorizon {
-		label("Размер шрифта")
-		nv := numberField("el_fontsize", row(panelX, y), float64(e.FontSize), 1, 0)
-		if int(nv) != e.FontSize {
-			e.FontSize = int(nv)
-			changed = true
+		if e.Kind == KindTapeV || e.Kind == KindTapeH {
+			fsRect, thickRect := pairRow("Размер шрифта", "Толщина", 0.5)
+			fontSize := e.FontSize
+			if fontSize == 0 {
+				fontSize = 15
+			}
+			nv := numberField("el_fontsize", fsRect, float64(fontSize), 1, 0)
+			if int(nv) != fontSize {
+				e.FontSize = int(nv)
+				changed = true
+			}
+			thickness := e.Thickness
+			if thickness == 0 {
+				thickness = 1
+			}
+			nvt := numberField("el_thickness", thickRect, float64(thickness), 1, 0)
+			if int(nvt) != thickness {
+				e.Thickness = int(nvt)
+				if e.Thickness < 1 {
+					e.Thickness = 1
+				}
+				changed = true
+			}
+			y += 36
+		} else {
+			label("Размер шрифта")
+			fontSize := e.FontSize
+			if fontSize == 0 {
+				fontSize = 15
+			}
+			nv := numberField("el_fontsize", row(panelX, y), float64(fontSize), 1, 0)
+			if int(nv) != fontSize {
+				e.FontSize = int(nv)
+				changed = true
+			}
+			y += 36
 		}
-		y += 36
+		y += panelGroupGap
 	}
 
 	if e.Kind == KindTapeV || e.Kind == KindTapeH {
-		label("Стиль")
+		styleRect, dirRect := pairRow("Стиль", "Направление", 0.5)
 		sopts := []string{string(StyleStraight), string(StyleArc)}
 		si := 0
 		if e.Style == StyleArc {
 			si = 1
 		}
-		selectField("style", row(panelX, y), sopts, si, func(i int) {
+		selectField("style", styleRect, sopts, si, func(i int) {
 			newStyle := Style(sopts[i])
 			if newStyle != e.Style {
 				e.Style = newStyle
 				changed = true
 			}
 		})
-		y += 36
-
-		label("Направление")
 		var dopts []string
 		if e.Kind == KindTapeV {
 			dopts = []string{string(DirUp), string(DirDown)}
 		} else {
 			dopts = []string{string(DirCW), string(DirCCW)}
 		}
-		selectField("direction", row(panelX, y), dopts, indexOf(dopts, string(e.Direction)), func(i int) {
+		selectField("direction", dirRect, dopts, indexOf(dopts, string(e.Direction)), func(i int) {
 			newDir := Direction(dopts[i])
 			if newDir != e.Direction {
 				e.Direction = newDir
@@ -587,7 +688,7 @@ func DrawPropertiesPanel(c *native.Canvas, in *native.Input, screenW, screenH in
 		y += 36
 
 		if e.Kind == KindTapeV {
-			label("Сторона подписи")
+			label("Сторона")
 			lopts := []string{string(SideAuto), string(SideLeft), string(SideRight)}
 			selectField("labelside", row(panelX, y), lopts, indexOf(lopts, string(e.LabelSide)), func(i int) {
 				newSide := LabelSide(lopts[i])
@@ -599,89 +700,117 @@ func DrawPropertiesPanel(c *native.Canvas, in *native.Input, screenW, screenH in
 			y += 36
 		}
 
-		label("Длина (доля экрана)")
-		nv := numberField("el_length", row(panelX, y), e.Length, 0.01, 3)
+		lenRect, rangeRect := pairRow("Длина", "Диапазон", 0.5)
+		nv := numberField("el_length", lenRect, e.Length, 0.01, 3)
 		if nv != e.Length {
 			e.Length = nv
 			changed = true
 		}
-		y += 36
-
-		label("Диапазон")
-		nv = numberField("el_range", row(panelX, y), e.Range, 10, 0)
+		nv = numberField("el_range", rangeRect, e.Range, 10, 0)
 		if nv != e.Range {
 			e.Range = nv
 			changed = true
 		}
 		y += 36
 
-		label("Малый шаг")
-		nv = numberField("el_minorstep", row(panelX, y), e.MinorStep, 1, 0)
+		minorRect, majorRect := pairRow("Малый шаг", "Большой шаг", 0.5)
+		nv = numberField("el_minorstep", minorRect, e.MinorStep, 1, 0)
 		if nv != e.MinorStep {
 			e.MinorStep = nv
 			changed = true
 		}
-		y += 36
-
-		label("Большой шаг")
-		nv = numberField("el_majorstep", row(panelX, y), e.MajorStep, 5, 0)
+		nv = numberField("el_majorstep", majorRect, e.MajorStep, 5, 0)
 		if nv != e.MajorStep {
 			e.MajorStep = nv
 			changed = true
 		}
-		y += 36
+		y += 36 + panelGroupGap
 
-		label("Толщина линий")
-		thickness := e.Thickness
-		if thickness == 0 {
-			thickness = 1
+		zonesLocked := e.AutoColor
+		zonesRealIn := in
+		if zonesLocked {
+			masked := *in
+			masked.MouseDown, masked.Pressed, masked.Released, masked.ScrollDelta = false, false, false, 0
+			in = &masked
 		}
-		nvt := numberField("el_thickness", row(panelX, y), float64(thickness), 1, 0)
-		if int(nvt) != thickness {
-			e.Thickness = int(nvt)
-			if e.Thickness < 1 {
-				e.Thickness = 1
-			}
-			changed = true
-		}
-		y += 36
+		zonesTop := y
 
-		label("Зоны (порог → цвет)")
+		label("Зоны")
+		rowH := 36
+		thW := PanelWidth - 32 - rowH - rowH - 16
 		for zi := 0; zi < len(e.Zones); zi++ {
-			zr := row(panelX, y)
-			thRect := native.Rect{X: zr.X, Y: zr.Y, W: 90, H: zr.H}
+			swatchRect := native.Rect{X: panelX + 16, Y: y, W: rowH, H: rowH}
+			thRect := native.Rect{X: swatchRect.X + rowH + 8, Y: y, W: thW, H: rowH}
+			delRect := native.Rect{X: panelX + 16 + PanelWidth - 32 - rowH, Y: y, W: rowH, H: rowH}
+
 			nv := numberField(fmt.Sprintf("el_zone_%d", zi), thRect, e.Zones[zi].Threshold, 10, 0)
 			if nv != e.Zones[zi].Threshold {
 				e.Zones[zi].Threshold = nv
 				changed = true
 			}
-			swatch := native.Rect{X: zr.X + 96, Y: zr.Y, W: 24, H: zr.H}
-			c.FillRect(swatch, toNativeColor(e.Zones[zi].Color))
-			c.StrokeRect(swatch, fieldBorder, 1)
-			delRect := native.Rect{X: zr.X + zr.W - 28, Y: zr.Y, W: 28, H: zr.H}
-			if native.Button(c, in, delRect, "×", dangerBg, dangerHover, textCol, 13) {
+
+			c.FillRoundedRect(swatchRect, native.RadiusSmall, toNativeColor(e.Zones[zi].Color))
+			swatchBorder := fieldBorder
+			if edit.ColorPickerFor == e.ID && edit.ColorPickerZone == zi {
+				swatchBorder = fieldFocus
+			}
+			c.StrokeRoundedRect(swatchRect, native.RadiusSmall, swatchBorder, 2)
+			if !zonesLocked && swatchRect.Contains(in.MouseX, in.MouseY) && in.Released {
+				if edit.ColorPickerFor == e.ID && edit.ColorPickerZone == zi {
+					edit.ColorPickerFor = ""
+				} else {
+					edit.ColorPickerFor = e.ID
+					edit.ColorPickerZone = zi
+				}
+			}
+
+			if iconButton(delRect, "trash", "Удалить зону", dangerBg, dangerHover) {
 				e.Zones = append(e.Zones[:zi], e.Zones[zi+1:]...)
+				if edit.ColorPickerFor == e.ID && edit.ColorPickerZone == zi {
+					edit.ColorPickerFor = ""
+				}
 				changed = true
-				y += 34
+				y += rowH + 10
 				continue
 			}
-			y += 34
+			y += rowH + 10
+
+			if edit.ColorPickerFor == e.ID && edit.ColorPickerZone == zi {
+				pickerH := native.ColorPickerHeight(PanelWidth - 32)
+				pickerRect := native.Rect{X: panelX + 16, Y: y, W: PanelWidth - 32, H: pickerH}
+				newZoneCol := native.ColorPicker(c, in, pickerRect, toNativeColor(e.Zones[zi].Color))
+				if newZoneCol != toNativeColor(e.Zones[zi].Color) {
+					e.Zones[zi].Color = Color{R: newZoneCol.R, G: newZoneCol.G, B: newZoneCol.B, A: newZoneCol.A}
+					changed = true
+				}
+				y += pickerH + 10
+			}
 		}
-		addZoneRect := row(panelX, y)
-		if native.Button(c, in, addZoneRect, "+ Зона", btnBg, btnHover, textCol, 13) {
+		addZoneRect := native.Rect{X: panelX + 16, Y: y, W: 40, H: 32}
+		if iconButton(addZoneRect, "plus", "Добавить зону", btnBg, btnHover) {
 			e.Zones = append(e.Zones, Zone{Threshold: 0, Color: Color{R: 80, G: 255, B: 90, A: 255}})
 			changed = true
 		}
-		y += 36
+		y += 40
+
+		if zonesLocked {
+			in = zonesRealIn
+			c.FillRect(native.Rect{X: panelX + 16, Y: zonesTop, W: PanelWidth - 32, H: y - zonesTop}, native.Color{R: 10, G: 12, B: 15, A: 150})
+		}
+		y += panelGroupGap
 	}
 
-	label("Цвет")
-	newCol := native.ColorSliders(c, in, native.Rect{X: panelX + 16, Y: y, W: PanelWidth - 32, H: 72}, toNativeColor(e.Color))
-	if newCol != toNativeColor(e.Color) {
-		e.Color = Color{R: newCol.R, G: newCol.G, B: newCol.B, A: newCol.A}
-		changed = true
+	if !e.AutoColor && len(e.Zones) == 0 {
+		label("Цвет")
+		colorPickerH := native.ColorPickerHeight(PanelWidth - 32)
+		newCol := native.ColorPicker(c, in, native.Rect{X: panelX + 16, Y: y, W: PanelWidth - 32, H: colorPickerH}, toNativeColor(e.Color))
+		if newCol != toNativeColor(e.Color) {
+			e.Color = Color{R: newCol.R, G: newCol.G, B: newCol.B, A: newCol.A}
+			changed = true
+		}
+		y += colorPickerH + 16
+		y += panelGroupGap
 	}
-	y += 88
 
 	glowRect := row(panelX, y)
 	if native.Checkbox(c, in, native.Rect{X: glowRect.X, Y: glowRect.Y, W: 20, H: 20}, e.GlowEnabled, fieldBorder, fieldFocus, textCol, 13, "Свечение") {
@@ -711,15 +840,16 @@ func DrawPropertiesPanel(c *native.Canvas, in *native.Input, screenW, screenH in
 
 		if !e.GlowUseOwn {
 			label("Цвет свечения")
-			newGlowCol := native.ColorSliders(c, in, native.Rect{X: panelX + 16, Y: y, W: PanelWidth - 32, H: 72}, toNativeColor(e.GlowColor))
+			glowPickerH := native.ColorPickerHeight(PanelWidth - 32)
+			newGlowCol := native.ColorPicker(c, in, native.Rect{X: panelX + 16, Y: y, W: PanelWidth - 32, H: glowPickerH}, toNativeColor(e.GlowColor))
 			if newGlowCol != toNativeColor(e.GlowColor) {
 				e.GlowColor = Color{R: newGlowCol.R, G: newGlowCol.G, B: newGlowCol.B, A: newGlowCol.A}
 				changed = true
 			}
-			y += 88
+			y += glowPickerH + 16
 		}
 
-		label("Интенсивность свечения, %")
+		label("Интенсивность, %")
 		intensityPct := numberField("el_glow_intensity", row(panelX, y), e.GlowIntensity*100, 5, 0)
 		nv := intensityPct / 100
 		if nv < 0 {
@@ -736,7 +866,7 @@ func DrawPropertiesPanel(c *native.Canvas, in *native.Input, screenW, screenH in
 	}
 
 	delRect := native.Rect{X: panelX + 16, Y: screenH - 60, W: PanelWidth - 32, H: 36}
-	if native.Button(c, in, delRect, "Удалить элемент", dangerBg, dangerHover, textCol, 14) {
+	if native.Button(c, in, delRect, "Удалить", dangerBg, dangerHover, textCol, 14) {
 		tmpl.Elements = append(tmpl.Elements[:idx], tmpl.Elements[idx+1:]...)
 		edit.Selected = ""
 		edit.FocusField = ""
@@ -744,16 +874,14 @@ func DrawPropertiesPanel(c *native.Canvas, in *native.Input, screenW, screenH in
 		changed = true
 	}
 
-	drawPendingDropdown(c, originalIn, edit, pending, screenH)
-
-	return changed
+	return finish()
 }
 
 func drawPendingDropdown(c *native.Canvas, in *native.Input, edit *EditState, pending *dropdownField, screenH int) {
 	if pending == nil {
 		return
 	}
-	newIdx, selected := native.SelectList(c, in, pending.rect, pending.options, pending.current, &edit.DropdownScroll, screenH, fieldBg, btnHover, textCol, fieldBorder, 13)
+	newIdx, selected := native.SelectList(c, in, pending.rect, pending.options, pending.current, &edit.DropdownScroll, screenH, fieldBg, btnHover, textCol, fieldFocus, 13)
 	if selected {
 		pending.apply(newIdx)
 		edit.OpenDropdown = ""

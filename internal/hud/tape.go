@@ -99,6 +99,21 @@ func arcPointH(cx, cy, radius int, theta float64, extra int) (float64, float64) 
 	return x, y
 }
 
+func tapeVSign(e Element) int {
+	switch e.LabelSide {
+	case SideLeft:
+		return 1
+	case SideRight:
+		return -1
+	default:
+		if e.X >= 0.5 {
+			return -1
+		}
+
+		return 1
+	}
+}
+
 func drawTapeV(c *native.Canvas, cx, cy, lengthPx int, value float64, e Element, v Values, baseCol native.Color) {
 	if e.Range <= 0 || e.MinorStep <= 0 {
 		return
@@ -112,17 +127,7 @@ func drawTapeV(c *native.Canvas, cx, cy, lengthPx int, value float64, e Element,
 		fontSize = 13
 	}
 
-	sign := 1
-	switch e.LabelSide {
-	case SideLeft:
-		sign = 1
-	case SideRight:
-		sign = -1
-	default:
-		if e.X >= 0.5 {
-			sign = -1
-		}
-	}
+	sign := tapeVSign(e)
 
 	dirMul := 1.0
 	if e.Direction == DirDown {
@@ -207,7 +212,7 @@ func drawTapeV(c *native.Canvas, cx, cy, lengthPx int, value float64, e Element,
 	boxRect := native.Rect{X: boxX, Y: cy - boxH/2, W: boxW, H: boxH}
 	c.FillRect(boxRect, native.Color{R: 10, G: 12, B: 15, A: 220})
 	c.StrokeRect(boxRect, col, thickness+1)
-	c.Text(boxRect.X+8, cy+bh/2-2, col, fontSize+2, boxLabel)
+	c.TextCentered(boxRect, col, fontSize+2, boxLabel)
 }
 
 func drawTapeH(c *native.Canvas, cx, cy, lengthPx int, value float64, e Element, v Values, baseCol native.Color) {
@@ -298,5 +303,5 @@ func drawTapeH(c *native.Canvas, cx, cy, lengthPx int, value float64, e Element,
 	boxRect := native.Rect{X: cx - bw/2 - 8, Y: cy - bh - 22, W: bw + 16, H: bh + 10}
 	c.FillRect(boxRect, native.Color{R: 10, G: 12, B: 15, A: 220})
 	c.StrokeRect(boxRect, col, thickness+1)
-	c.Text(boxRect.X+8, boxRect.Y+bh+2, col, fontSize+2, boxLabel)
+	c.TextCentered(boxRect, col, fontSize+2, boxLabel)
 }

@@ -109,6 +109,24 @@ func (c *Canvas) FillCircle(cx, cy, radius int, col Color) {
 	C.cairo_fill(cr)
 }
 
+func (c *Canvas) FillPath(subpaths [][]Point, col Color) {
+	cr := c.win.cairoCtx
+	setSource(cr, col)
+	C.cairo_set_fill_rule(cr, C.CAIRO_FILL_RULE_WINDING)
+
+	for _, sp := range subpaths {
+		if len(sp) < 2 {
+			continue
+		}
+		C.cairo_move_to(cr, C.double(sp[0].X), C.double(sp[0].Y))
+		for _, p := range sp[1:] {
+			C.cairo_line_to(cr, C.double(p.X), C.double(p.Y))
+		}
+		C.cairo_close_path(cr)
+	}
+	C.cairo_fill(cr)
+}
+
 func (c *Canvas) Line(points []Point, col Color, width int) {
 	if len(points) < 2 {
 		return
@@ -156,6 +174,37 @@ func (c *Canvas) Text(x, y int, col Color, size int, s string) {
 
 func (c *Canvas) TextBold(x, y int, col Color, size int, s string) {
 	c.text(x, y, col, size, true, s)
+}
+
+func (c *Canvas) TextCentered(r Rect, col Color, size int, s string) {
+	w := c.win
+	font := w.font(size, false)
+	if font == nil {
+		return
+	}
+	cs := C.CString(s)
+	defer C.free(unsafe.Pointer(cs))
+	var extents C.XGlyphInfo
+	C.XftTextExtentsUtf8(w.display, font, (*C.XftChar8)(unsafe.Pointer(cs)), C.int(len(s)), &extents)
+
+	x := r.X + (r.W-int(extents.width))/2 - int(extents.x)
+	y := r.Y + (r.H-int(extents.height))/2 + int(extents.y)
+	c.text(x, y, col, size, false, s)
+}
+
+func (c *Canvas) TextVCentered(x int, r Rect, col Color, size int, s string) {
+	w := c.win
+	font := w.font(size, false)
+	if font == nil {
+		return
+	}
+	cs := C.CString(s)
+	defer C.free(unsafe.Pointer(cs))
+	var extents C.XGlyphInfo
+	C.XftTextExtentsUtf8(w.display, font, (*C.XftChar8)(unsafe.Pointer(cs)), C.int(len(s)), &extents)
+
+	y := r.Y + (r.H-int(extents.height))/2 + int(extents.y)
+	c.text(x, y, col, size, false, s)
 }
 
 func (c *Canvas) textSize(s string, size int, bold bool) (int, int) {
