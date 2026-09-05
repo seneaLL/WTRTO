@@ -1,8 +1,8 @@
 package overlay
 
 import (
-	"github.com/seneal/wtrto/internal/native"
-	"github.com/seneal/wtrto/internal/platform"
+	"github.com/seneaLL/WTRTO/internal/native"
+	"github.com/seneaLL/WTRTO/internal/platform"
 )
 
 type Window struct {

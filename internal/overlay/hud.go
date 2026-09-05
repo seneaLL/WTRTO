@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/seneal/wtrto/internal/i18n"
-	"github.com/seneal/wtrto/internal/metrics"
-	"github.com/seneal/wtrto/internal/native"
-	"github.com/seneal/wtrto/internal/version"
+	"github.com/seneaLL/WTRTO/internal/i18n"
+	"github.com/seneaLL/WTRTO/internal/metrics"
+	"github.com/seneaLL/WTRTO/internal/native"
+	"github.com/seneaLL/WTRTO/internal/version"
 )
 
 var (

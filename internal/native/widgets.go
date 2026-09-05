@@ -3,7 +3,7 @@ package native
 import (
 	"strconv"
 
-	"github.com/seneal/wtrto/internal/clipboard"
+	"github.com/seneaLL/WTRTO/internal/clipboard"
 )
 
 const (

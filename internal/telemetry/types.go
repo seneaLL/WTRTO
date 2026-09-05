@@ -11,14 +11,21 @@ type Indicators struct {
 	Army  string `json:"army"`
 
 	Speed float64 `json:"speed"`
+	TAS   float64 `json:"tas"`
+	Mach  float64 `json:"mach"`
+	Mach1 float64 `json:"mach1"`
 
 	Vario            float64 `json:"vario"`
 	AltitudeHour     float64 `json:"altitude_hour"`
 	AltitudeMin      float64 `json:"altitude_min"`
+	Altitude1Min     float64 `json:"altitude1_min"`
 	Altitude10k      float64 `json:"altitude_10k"`
+	RadioAltitude    float64 `json:"radio_altitude"`
 	AviahorizonRoll  float64 `json:"aviahorizon_roll"`
 	AviahorizonPitch float64 `json:"aviahorizon_pitch"`
 	Bank             float64 `json:"bank"`
+	Bank1            float64 `json:"bank1"`
+	Turn             float64 `json:"turn"`
 	Compass          float64 `json:"compass"`
 	AoA              float64 `json:"aoa"`
 	StickElevator    float64 `json:"stick_elevator"`
@@ -29,13 +36,15 @@ type Indicators struct {
 	GearLampDown     float64 `json:"gear_lamp_down"`
 	Throttle         float64 `json:"throttle"`
 	Throttle1        float64 `json:"throttle1"`
-	Trimmer          float64 `json:"trimmer"`
+	Trimmer          float64 `json:"trimmer_indicator"`
 	GMeter           float64 `json:"g_meter"`
 	GMeterMin        float64 `json:"g_meter_min"`
 	GMeterMax        float64 `json:"g_meter_max"`
 	ClockHour        float64 `json:"clock_hour"`
 	ClockMin         float64 `json:"clock_min"`
 	ClockSec         float64 `json:"clock_sec"`
+
+	WingSweepLever float64 `json:"wing_sweep_lever"`
 
 	Stabilizer           float64 `json:"stabilizer"`
 	Gear                 float64 `json:"gear"`
@@ -151,6 +160,20 @@ func (s State) EngineRadiatorPct(n int) (float64, bool) {
 func (s State) EngineCompressorStage(n int) (float64, bool) {
 	return s.float(fmt.Sprintf("compressor stage %d", n))
 }
+
+func (s State) EngineCount() int {
+	n := 0
+	for i := 1; i <= maxEngines; i++ {
+		if _, ok := s.EngineThrottlePct(i); !ok {
+			break
+		}
+		n = i
+	}
+
+	return n
+}
+
+const maxEngines = 8
 
 type MapInfo struct {
 	Valid         bool      `json:"valid"`

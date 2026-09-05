@@ -1,4 +1,4 @@
-MODULE := github.com/seneal/wtrto
+MODULE := github.com/seneaLL/WTRTO
 VERSION := $(shell git rev-parse --short HEAD 2>/dev/null || echo dev)
 BUILD_DATE := $(shell date -u +%Y-%m-%d)
 BUILD_HASH := $(shell find . -name '*.go' -not -path './bin/*' | LC_ALL=C sort | xargs cat | sha256sum | cut -c1-12)

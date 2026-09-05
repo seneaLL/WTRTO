@@ -6,10 +6,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/seneal/wtrto/internal/clipboard"
-	"github.com/seneal/wtrto/internal/config"
-	"github.com/seneal/wtrto/internal/dialog"
-	"github.com/seneal/wtrto/internal/native"
+	"github.com/seneaLL/WTRTO/internal/clipboard"
+	"github.com/seneaLL/WTRTO/internal/config"
+	"github.com/seneaLL/WTRTO/internal/dialog"
+	"github.com/seneaLL/WTRTO/internal/native"
 )
 
 var (
@@ -492,6 +492,15 @@ func DrawPropertiesPanel(c *native.Canvas, in *native.Input, screenW, screenH in
 			}
 		})
 		y += 36
+
+		if supportsAutoColor(e.Binding) {
+			autoColorRect := row(panelX, y)
+			if native.Checkbox(c, in, native.Rect{X: autoColorRect.X, Y: autoColorRect.Y, W: 20, H: 20}, e.AutoColor, fieldBorder, fieldFocus, textCol, 13, "Авто-цвет по лимиту") {
+				e.AutoColor = !e.AutoColor
+				changed = true
+			}
+			y += 34
+		}
 	}
 
 	if e.Kind == KindText {

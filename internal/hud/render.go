@@ -3,7 +3,7 @@ package hud
 import (
 	"fmt"
 
-	"github.com/seneal/wtrto/internal/native"
+	"github.com/seneaLL/WTRTO/internal/native"
 )
 
 type EditState struct {
@@ -41,6 +41,111 @@ func toNativeColor(c Color) native.Color {
 	return native.Color{R: c.R, G: c.G, B: c.B, A: c.A}
 }
 
+var (
+	speedAutoGreen  = native.Color{R: 80, G: 255, B: 90, A: 255}
+	speedAutoYellow = native.Color{R: 255, G: 220, B: 60, A: 255}
+	speedAutoRed    = native.Color{R: 255, G: 70, B: 60, A: 255}
+)
+
+const (
+	speedWarnStart = 0.85
+	speedWarnFull  = 0.95
+)
+
+func ratioColor(r float64) native.Color {
+	switch {
+	case r >= speedWarnFull:
+		return speedAutoRed
+	case r >= speedWarnStart:
+		t := (r - speedWarnStart) / (speedWarnFull - speedWarnStart)
+
+		return lerpColor(speedAutoYellow, speedAutoRed, t)
+	default:
+		return speedAutoGreen
+	}
+}
+
+var AutoColorBindings = []Binding{BindIAS, BindMach, BindGLoad}
+
+func supportsAutoColor(b Binding) bool {
+	for _, ab := range AutoColorBindings {
+		if ab == b {
+			return true
+		}
+	}
+
+	return false
+}
+
+type limitRef struct {
+	known  bool
+	posMax float64
+	negMax float64
+}
+
+func limitFor(b Binding, v Values) limitRef {
+	switch b {
+	case BindIAS:
+		return limitRef{known: v.SpeedLimitKnown, posMax: v.SpeedLimitMaxKmh}
+	case BindMach:
+		return limitRef{known: v.MachLimitKnown, posMax: v.MachLimitMax}
+	case BindGLoad:
+		return limitRef{known: v.GLoadLimitKnown, posMax: v.GLoadLimitPos, negMax: v.GLoadLimitNeg}
+	}
+
+	return limitRef{}
+}
+
+func (lr limitRef) ratio(value float64) (float64, bool) {
+	if !lr.known {
+		return 0, false
+	}
+	if value >= 0 {
+		if lr.posMax <= 0 {
+			return 0, false
+		}
+
+		return value / lr.posMax, true
+	}
+	if lr.negMax >= 0 {
+		return 0, false
+	}
+
+	return value / lr.negMax, true
+}
+
+func autoColorForBinding(b Binding, v Values, value float64) native.Color {
+	if b == BindIAS && v.SpeedWarning {
+		return speedAutoRed
+	}
+
+	r, ok := limitFor(b, v).ratio(value)
+	if !ok {
+		return speedAutoGreen
+	}
+	if r < 0 {
+		r = -r
+	}
+
+	return ratioColor(r)
+}
+
+func elementColor(e Element, v Values) native.Color {
+	if e.AutoColor && supportsAutoColor(e.Binding) {
+		return autoColorForBinding(e.Binding, v, bindingValue(e.Binding, v))
+	}
+
+	return toNativeColor(e.Color)
+}
+
+func tapeZoneColor(e Element, v Values, value float64, fallback native.Color) native.Color {
+	if e.AutoColor && supportsAutoColor(e.Binding) {
+		return autoColorForBinding(e.Binding, v, value)
+	}
+
+	return zoneColor(e.Zones, value, fallback)
+}
+
 func bindingValue(b Binding, v Values) float64 {
 	switch b {
 	case BindThrottlePct:
@@ -75,6 +180,106 @@ func bindingValue(b Binding, v Values) float64 {
 		return v.VSpeed
 	case BindIASRate:
 		return v.IASRate
+
+	case BindAileron:
+		return v.Aileron
+	case BindElevator:
+		return v.Elevator
+	case BindRudder:
+		return v.Rudder
+	case BindFlaps:
+		return v.Flaps
+	case BindGearPct:
+		return v.GearPct
+	case BindRollRate:
+		return v.RollRate
+	case BindFuelPct:
+		return v.FuelPct
+	case BindTrimmer:
+		return v.Trimmer
+	case BindRadioAlt:
+		return v.RadioAlt
+	case BindTurn:
+		return v.Turn
+	case BindWingSweep:
+		return v.WingSweep
+
+	case BindThrottle1:
+		return v.EngineThrottle[0]
+	case BindThrottle2:
+		return v.EngineThrottle[1]
+	case BindThrottle3:
+		return v.EngineThrottle[2]
+	case BindThrottle4:
+		return v.EngineThrottle[3]
+
+	case BindRPM1:
+		return v.EngineRPM[0]
+	case BindRPM2:
+		return v.EngineRPM[1]
+	case BindRPM3:
+		return v.EngineRPM[2]
+	case BindRPM4:
+		return v.EngineRPM[3]
+
+	case BindManifold1:
+		return v.EngineManifold[0]
+	case BindManifold2:
+		return v.EngineManifold[1]
+	case BindManifold3:
+		return v.EngineManifold[2]
+	case BindManifold4:
+		return v.EngineManifold[3]
+
+	case BindOilTemp3:
+		return v.EngineOilTemp[2]
+	case BindOilTemp4:
+		return v.EngineOilTemp[3]
+
+	case BindWaterTemp1:
+		return v.EngineWaterTemp[0]
+	case BindWaterTemp2:
+		return v.EngineWaterTemp[1]
+	case BindWaterTemp3:
+		return v.EngineWaterTemp[2]
+	case BindWaterTemp4:
+		return v.EngineWaterTemp[3]
+
+	case BindPower1:
+		return v.EnginePower[0]
+	case BindPower2:
+		return v.EnginePower[1]
+	case BindPower3:
+		return v.EnginePower[2]
+	case BindPower4:
+		return v.EnginePower[3]
+
+	case BindThrust1:
+		return v.EngineThrust[0]
+	case BindThrust2:
+		return v.EngineThrust[1]
+	case BindThrust3:
+		return v.EngineThrust[2]
+	case BindThrust4:
+		return v.EngineThrust[3]
+
+	case BindEfficiency1:
+		return v.EngineEfficiency[0]
+	case BindEfficiency2:
+		return v.EngineEfficiency[1]
+	case BindEfficiency3:
+		return v.EngineEfficiency[2]
+	case BindEfficiency4:
+		return v.EngineEfficiency[3]
+
+	case BindPropPitch1:
+		return v.EnginePropPitch[0]
+	case BindPropPitch2:
+		return v.EnginePropPitch[1]
+	case BindPropPitch3:
+		return v.EnginePropPitch[2]
+	case BindPropPitch4:
+		return v.EnginePropPitch[3]
 	}
 
 	return 0
@@ -204,15 +409,16 @@ func Draw(c *native.Canvas, screenW, screenH int, tmpl *Template, v Values, edit
 			c.DrawArtificialHorizon(x, y, r, v.Pitch, v.Roll, horizonSky, horizonGround, col, col)
 		case KindTapeV:
 			length := int(e.Length * float64(screenH))
-			drawTapeV(c, x, y, length, bindingValue(e.Binding, v), *e, toNativeColor(e.Color))
+			drawTapeV(c, x, y, length, bindingValue(e.Binding, v), *e, v, toNativeColor(e.Color))
 		case KindTapeH:
 			length := int(e.Length * float64(screenW))
-			drawTapeH(c, x, y, length, bindingValue(e.Binding, v), *e, toNativeColor(e.Color))
+			drawTapeH(c, x, y, length, bindingValue(e.Binding, v), *e, v, toNativeColor(e.Color))
 		default:
+			col := elementColor(*e, v)
 			if e.Bold {
-				c.TextBold(x, y, toNativeColor(e.Color), fs, text)
+				c.TextBold(x, y, col, fs, text)
 			} else {
-				c.Text(x, y, toNativeColor(e.Color), fs, text)
+				c.Text(x, y, col, fs, text)
 			}
 		}
 
@@ -373,9 +579,9 @@ func glowColor(e Element, v Values) native.Color {
 
 	switch e.Kind {
 	case KindTapeV, KindTapeH:
-		return zoneColor(e.Zones, bindingValue(e.Binding, v), toNativeColor(e.Color))
+		return tapeZoneColor(e, v, bindingValue(e.Binding, v), toNativeColor(e.Color))
 	default:
-		return toNativeColor(e.Color)
+		return elementColor(e, v)
 	}
 }
 

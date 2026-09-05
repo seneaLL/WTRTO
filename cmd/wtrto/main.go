@@ -11,15 +11,16 @@ import (
 	"sync"
 	"time"
 
-	"github.com/seneal/wtrto/internal/config"
-	"github.com/seneal/wtrto/internal/hud"
-	"github.com/seneal/wtrto/internal/i18n"
-	"github.com/seneal/wtrto/internal/metrics"
-	"github.com/seneal/wtrto/internal/native"
-	"github.com/seneal/wtrto/internal/overlay"
-	"github.com/seneal/wtrto/internal/telemetry"
-	"github.com/seneal/wtrto/internal/update"
-	"github.com/seneal/wtrto/internal/version"
+	"github.com/seneaLL/WTRTO/internal/config"
+	"github.com/seneaLL/WTRTO/internal/hud"
+	"github.com/seneaLL/WTRTO/internal/i18n"
+	"github.com/seneaLL/WTRTO/internal/limits"
+	"github.com/seneaLL/WTRTO/internal/metrics"
+	"github.com/seneaLL/WTRTO/internal/native"
+	"github.com/seneaLL/WTRTO/internal/overlay"
+	"github.com/seneaLL/WTRTO/internal/telemetry"
+	"github.com/seneaLL/WTRTO/internal/update"
+	"github.com/seneaLL/WTRTO/internal/version"
 )
 
 const overlayChildArg = "--overlay-child"
@@ -72,6 +73,34 @@ func startUpdateCheck() {
 		updateLatestSHA = res.LatestSHA
 		updateMu.Unlock()
 	}()
+}
+
+var (
+	limitsMu          sync.Mutex
+	limitsJustUpdated bool
+	limitsVersion     string
+)
+
+func startLimitsCheck() {
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cancel()
+		updated, err := limits.CheckAndUpdate(ctx)
+		if err != nil || !updated {
+			return
+		}
+		limitsMu.Lock()
+		limitsJustUpdated = true
+		limitsVersion = limits.Version()
+		limitsMu.Unlock()
+	}()
+}
+
+func limitsUpdateStatus() (bool, string) {
+	limitsMu.Lock()
+	defer limitsMu.Unlock()
+
+	return limitsJustUpdated, limitsVersion
 }
 
 func updateStatus() (bool, string) {
@@ -134,6 +163,7 @@ func applyLanguage(s config.State) {
 func runOverlay(launcherPID int) {
 	initial := config.Load()
 	applyLanguage(initial)
+	limits.Load()
 
 	w, err := overlay.New("wtrto-overlay", initial.EffectiveFPSLimit())
 	if err != nil {
@@ -275,8 +305,9 @@ func runOverlay(launcherPID int) {
 		foreground := wtRunning && w.ActiveWindowPID() == wtPID
 
 		gameplayVisible := mission.Active() && mapInfo.Valid && foreground
+		isAircraft := ind != nil && ind.IsAircraft()
 
-		hudActive = editMode || gameplayVisible
+		hudActive = editMode || (gameplayVisible && isAircraft)
 
 		target := 0.0
 		if hudActive {
@@ -650,13 +681,15 @@ func launcherFrame(c *native.Canvas, in *native.Input, w *native.Window) bool {
 	buildY := repoY - bh - 4
 	c.Text(margin+contentW-bw, buildY, colorTextDim, 11, buildText)
 
+	aboveY := buildY
+
 	if avail, latestSHA := updateStatus(); avail {
 		updText := "Доступно обновление"
 		if latestSHA != "" {
 			updText += " (" + latestSHA + ")"
 		}
 		uw, uh := c.TextSize(updText, 11)
-		updY := buildY - uh - 6
+		updY := aboveY - uh - 6
 		updRect := native.Rect{X: margin + contentW - uw - 6, Y: updY - 3, W: uw + 6, H: uh + 6}
 
 		hovered := updRect.Contains(in.MouseX, in.MouseY)
@@ -670,6 +703,17 @@ func launcherFrame(c *native.Canvas, in *native.Input, w *native.Window) bool {
 			}
 		}
 		c.Text(margin+contentW-uw, updY, updCol, 11, updText)
+		aboveY = updY
+	}
+
+	if limAvail, limVer := limitsUpdateStatus(); limAvail {
+		limText := "Обновлены данные о лимитах самолётов"
+		if limVer != "" {
+			limText += " (" + limVer + ")"
+		}
+		lw, lh := c.TextSize(limText, 11)
+		limY := aboveY - lh - 6
+		c.Text(margin+contentW-lw, limY, colorAccent, 11, limText)
 	}
 
 	if fpsDropdownOpen {
@@ -705,6 +749,8 @@ func runLauncher() {
 	}
 	applyLanguage(s)
 	startUpdateCheck()
+	limits.Load()
+	startLimitsCheck()
 
 	w, err := native.NewWindow(native.WindowOptions{
 		Title:     "WTRTO",

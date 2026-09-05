@@ -1,4 +1,4 @@
-module github.com/seneal/wtrto
+module github.com/seneaLL/WTRTO
 
 go 1.25.0
 

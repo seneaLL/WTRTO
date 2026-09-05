@@ -79,12 +79,6 @@ static void wtrto_set_min_size(Display *d, Window win, int minw, int minh) {
     XSetWMNormalHints(d, win, &hints);
 }
 
-// wtrto_set_opacity sets _NET_WM_WINDOW_OPACITY, the de-facto standard
-// property compositing window managers (picom, mutter, kwin, etc.) read to
-// blend a whole window - the X11 equivalent of Windows'
-// UpdateLayeredWindow SourceConstantAlpha, used for the HUD fade in/out. On
-// a non-compositing WM the property is simply ignored and the window stays
-// opaque, which is a harmless degrade rather than a failure.
 static void wtrto_set_opacity(Display *d, Window win, double opacity) {
     Atom opacityAtom = XInternAtom(d, "_NET_WM_WINDOW_OPACITY", False);
     unsigned long value = (unsigned long)(opacity * (double)0xFFFFFFFFUL);

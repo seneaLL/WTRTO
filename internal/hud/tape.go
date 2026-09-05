@@ -5,7 +5,7 @@ import (
 	"math"
 	"sort"
 
-	"github.com/seneal/wtrto/internal/native"
+	"github.com/seneaLL/WTRTO/internal/native"
 )
 
 func wrapValue(v, wrap float64) float64 {
@@ -99,11 +99,11 @@ func arcPointH(cx, cy, radius int, theta float64, extra int) (int, int) {
 	return int(x), int(y)
 }
 
-func drawTapeV(c *native.Canvas, cx, cy, lengthPx int, value float64, e Element, baseCol native.Color) {
+func drawTapeV(c *native.Canvas, cx, cy, lengthPx int, value float64, e Element, v Values, baseCol native.Color) {
 	if e.Range <= 0 || e.MinorStep <= 0 {
 		return
 	}
-	col := zoneColor(e.Zones, value, baseCol)
+	col := tapeZoneColor(e, v, value, baseCol)
 	thickness := elementThickness(e)
 	half := e.Range / 2
 	pxPerUnit := float64(lengthPx) / e.Range
@@ -137,7 +137,7 @@ func drawTapeV(c *native.Canvas, cx, cy, lengthPx int, value float64, e Element,
 		for t := -float64(lengthPx / 2); t <= float64(lengthPx/2); t += spineSegmentPx {
 			x, y := arcPointV(cx, cy, radius, sign, t/float64(radius), 0)
 			if havePrev {
-				segCol := zoneColor(e.Zones, tickValueAt(t-spineSegmentPx/2, value, pxPerUnit, dirMul), baseCol)
+				segCol := tapeZoneColor(e, v, tickValueAt(t-spineSegmentPx/2, value, pxPerUnit, dirMul), baseCol)
 				c.Line([]native.Point{{X: prevX, Y: prevY}, {X: x, Y: y}}, segCol, thickness)
 			}
 			prevX, prevY, havePrev = x, y, true
@@ -148,7 +148,7 @@ func drawTapeV(c *native.Canvas, cx, cy, lengthPx int, value float64, e Element,
 			if py2 > lengthPx/2 {
 				py2 = lengthPx / 2
 			}
-			segCol := zoneColor(e.Zones, tickValueAt(float64(py)+spineSegmentPx/2, value, pxPerUnit, dirMul), baseCol)
+			segCol := tapeZoneColor(e, v, tickValueAt(float64(py)+spineSegmentPx/2, value, pxPerUnit, dirMul), baseCol)
 			c.Line([]native.Point{{X: cx, Y: cy + py}, {X: cx, Y: cy + py2}}, segCol, thickness)
 		}
 	}
@@ -164,7 +164,7 @@ func drawTapeV(c *native.Canvas, cx, cy, lengthPx int, value float64, e Element,
 
 		display := wrapValue(tick, e.Wrap)
 		major := isMajorTick(tick, e.MinorStep, e.MajorStep)
-		tickCol := zoneColor(e.Zones, tick, baseCol)
+		tickCol := tapeZoneColor(e, v, tick, baseCol)
 
 		tickLen := 6
 		if major {
@@ -209,11 +209,11 @@ func drawTapeV(c *native.Canvas, cx, cy, lengthPx int, value float64, e Element,
 	c.Text(boxRect.X+8, cy+bh/2-2, col, fontSize+2, boxLabel)
 }
 
-func drawTapeH(c *native.Canvas, cx, cy, lengthPx int, value float64, e Element, baseCol native.Color) {
+func drawTapeH(c *native.Canvas, cx, cy, lengthPx int, value float64, e Element, v Values, baseCol native.Color) {
 	if e.Range <= 0 || e.MinorStep <= 0 {
 		return
 	}
-	col := zoneColor(e.Zones, value, baseCol)
+	col := tapeZoneColor(e, v, value, baseCol)
 	thickness := elementThickness(e)
 	half := e.Range / 2
 	pxPerUnit := float64(lengthPx) / e.Range
@@ -235,7 +235,7 @@ func drawTapeH(c *native.Canvas, cx, cy, lengthPx int, value float64, e Element,
 		for t := -float64(lengthPx / 2); t <= float64(lengthPx/2); t += spineSegmentPx {
 			x, y := arcPointH(cx, cy, radius, t/float64(radius), 0)
 			if havePrev {
-				segCol := zoneColor(e.Zones, tickValueAt(t-spineSegmentPx/2, value, pxPerUnit, dirMul), baseCol)
+				segCol := tapeZoneColor(e, v, tickValueAt(t-spineSegmentPx/2, value, pxPerUnit, dirMul), baseCol)
 				c.Line([]native.Point{{X: prevX, Y: prevY}, {X: x, Y: y}}, segCol, thickness)
 			}
 			prevX, prevY, havePrev = x, y, true
@@ -246,7 +246,7 @@ func drawTapeH(c *native.Canvas, cx, cy, lengthPx int, value float64, e Element,
 			if px2 > lengthPx/2 {
 				px2 = lengthPx / 2
 			}
-			segCol := zoneColor(e.Zones, tickValueAt(float64(px)+spineSegmentPx/2, value, pxPerUnit, dirMul), baseCol)
+			segCol := tapeZoneColor(e, v, tickValueAt(float64(px)+spineSegmentPx/2, value, pxPerUnit, dirMul), baseCol)
 			c.Line([]native.Point{{X: cx + px, Y: cy}, {X: cx + px2, Y: cy}}, segCol, thickness)
 		}
 	}
@@ -262,7 +262,7 @@ func drawTapeH(c *native.Canvas, cx, cy, lengthPx int, value float64, e Element,
 
 		display := wrapValue(tick, e.Wrap)
 		major := isMajorTick(tick, e.MinorStep, e.MajorStep)
-		tickCol := zoneColor(e.Zones, tick, baseCol)
+		tickCol := tapeZoneColor(e, v, tick, baseCol)
 
 		tickLen := 6
 		if major {
