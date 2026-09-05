@@ -9,16 +9,23 @@ overlay on top of the game - no game files are modified.
 
 ## Status
 
-Early development. Not usable yet.
+Early development, but usable - see [Releases](https://github.com/seneaLL/WTRTO/releases) for builds.
 
 ## Goals
 
-- Cross-platform: Windows, Linux, macOS
+- Cross-platform: Windows, Linux, macOS (macOS support undecided - may be dropped)
 - Transparent, always-on-top, click-through overlay window
 - Configurable indicators (speed, altitude, fuel, WEP timer, etc.)
+- Fully open source (MIT)
+
+## Planned
+
 - Per-vehicle profiles
 - Flight logging to CSV
-- Fully open source (MIT)
+
+## Feedback
+
+Questions, bug reports, suggestions: [Discord](https://discord.gg/m8dSTaZcN4)
 
 ## Building
 
