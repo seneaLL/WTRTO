@@ -44,7 +44,7 @@ type Indicators struct {
 	ClockMin         float64 `json:"clock_min"`
 	ClockSec         float64 `json:"clock_sec"`
 
-	WingSweepLever float64 `json:"wing_sweep_lever"`
+	WingSweepIndicator float64 `json:"wing_sweep_indicator"`
 
 	Stabilizer           float64 `json:"stabilizer"`
 	Gear                 float64 `json:"gear"`
