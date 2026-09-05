@@ -28,6 +28,8 @@ var (
 	procGdipSetPenLineCap197819      = gdiplus.NewProc("GdipSetPenLineCap197819")
 	procGdipSetPenLineJoin           = gdiplus.NewProc("GdipSetPenLineJoin")
 	procGdipDrawLinesI               = gdiplus.NewProc("GdipDrawLinesI")
+	procGdipDrawLines                = gdiplus.NewProc("GdipDrawLines")
+	procGdipFillRectangle            = gdiplus.NewProc("GdipFillRectangle")
 	procGdipFillEllipseI             = gdiplus.NewProc("GdipFillEllipseI")
 	procGdipCreatePath               = gdiplus.NewProc("GdipCreatePath")
 	procGdipDeletePath               = gdiplus.NewProc("GdipDeletePath")
@@ -72,6 +74,8 @@ type gdiplusStartupInput struct {
 type gpRectF struct{ X, Y, W, H float32 }
 
 type gpPointI struct{ X, Y int32 }
+
+type gpPointF struct{ X, Y float32 }
 
 type Canvas struct {
 	win *Window
@@ -246,12 +250,12 @@ func (c *Canvas) Line(points []Point, col Color, width int) {
 	procGdipSetPenLineCap197819.Call(pen, lineCapRound, lineCapRound, lineCapRound)
 	procGdipSetPenLineJoin.Call(pen, lineJoinRound)
 
-	pts := make([]gpPointI, len(points))
+	pts := make([]gpPointF, len(points))
 	for i, p := range points {
-		pts[i] = gpPointI{X: int32(p.X), Y: int32(p.Y)}
+		pts[i] = gpPointF{X: float32(p.X), Y: float32(p.Y)}
 	}
 
-	procGdipDrawLinesI.Call(c.win.graphics, pen, uintptr(unsafe.Pointer(&pts[0])), uintptr(len(pts)))
+	procGdipDrawLines.Call(c.win.graphics, pen, uintptr(unsafe.Pointer(&pts[0])), uintptr(len(pts)))
 }
 
 func (c *Canvas) fontFor(size int, bold bool) uintptr {
@@ -376,18 +380,18 @@ func (c *Canvas) DrawArtificialHorizon(cx, cy, radius int, pitchDeg, rollDeg flo
 	procGdipTranslateWorldTransform.Call(g, floatBits(float32(cx)), floatBits(float32(cy)), matrixOrderPrepend)
 	procGdipRotateWorldTransform.Call(g, floatBits(float32(-rollDeg)), matrixOrderPrepend)
 
-	big := radius * 3
-	pitchOffset := int(pitchDeg / 90.0 * float64(radius))
+	big := float64(radius * 3)
+	pitchOffset := pitchDeg / 90.0 * float64(radius)
 
 	skyBrush := c.brushFor(sky)
 	groundBrush := c.brushFor(ground)
 
-	procGdipFillRectangleI.Call(g, skyBrush, uintptr(-big), uintptr(-big+pitchOffset), uintptr(2*big), uintptr(big))
-	procGdipFillRectangleI.Call(g, groundBrush, uintptr(-big), uintptr(pitchOffset), uintptr(2*big), uintptr(big))
+	procGdipFillRectangle.Call(g, skyBrush, floatBits(float32(-big)), floatBits(float32(-big+pitchOffset)), floatBits(float32(2*big)), floatBits(float32(big)))
+	procGdipFillRectangle.Call(g, groundBrush, floatBits(float32(-big)), floatBits(float32(pitchOffset)), floatBits(float32(2*big)), floatBits(float32(big)))
 
 	linePen := c.penFor(line, 2)
-	horizonPts := []gpPointI{{X: int32(-big), Y: int32(pitchOffset)}, {X: int32(big), Y: int32(pitchOffset)}}
-	procGdipDrawLinesI.Call(g, linePen, uintptr(unsafe.Pointer(&horizonPts[0])), 2)
+	horizonPts := []gpPointF{{X: float32(-big), Y: float32(pitchOffset)}, {X: float32(big), Y: float32(pitchOffset)}}
+	procGdipDrawLines.Call(g, linePen, uintptr(unsafe.Pointer(&horizonPts[0])), 2)
 
 	procGdipResetWorldTransform.Call(g)
 	procGdipResetClip.Call(g)

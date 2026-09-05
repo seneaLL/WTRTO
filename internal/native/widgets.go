@@ -243,7 +243,7 @@ func NumberStepper(c *Canvas, in *Input, r Rect, value, step float64, precision 
 		if !*selectedAll {
 			cw, _ := c.TextSize(string(runes[:*cursor]), fontSize)
 			cx := tx + cw
-			c.Line([]Point{{X: cx, Y: midRect.Y + 4}, {X: cx, Y: midRect.Y + midRect.H - 4}}, focusCol, 2)
+			c.Line([]Point{{X: float64(cx), Y: float64(midRect.Y + 4)}, {X: float64(cx), Y: float64(midRect.Y + midRect.H - 4)}}, focusCol, 2)
 		}
 	} else {
 		label := strconv.FormatFloat(value, 'f', precision, 64)
@@ -317,7 +317,7 @@ func TextInput(c *Canvas, in *Input, r Rect, value string, focused bool, cursor 
 
 	if focused && !*selectedAll {
 		cx := tx + cursorW
-		c.Line([]Point{{X: cx, Y: r.Y + 4}, {X: cx, Y: r.Y + r.H - 4}}, focusCol, 2)
+		c.Line([]Point{{X: float64(cx), Y: float64(r.Y + 4)}, {X: float64(cx), Y: float64(r.Y + r.H - 4)}}, focusCol, 2)
 	}
 
 	c.Unclip()
@@ -503,9 +503,9 @@ func Sparkline(c *Canvas, r Rect, values []float32, col Color) {
 
 	pts := make([]Point, len(values))
 	for i, v := range values {
-		x := r.X + i*r.W/(len(values)-1)
+		x := float64(r.X) + float64(i)*float64(r.W)/float64(len(values)-1)
 		norm := (v - min) / span
-		y := r.Y + r.H - int(norm*float32(r.H))
+		y := float64(r.Y+r.H) - float64(norm)*float64(r.H)
 		pts[i] = Point{X: x, Y: y}
 	}
 	c.Line(pts, col, 2)

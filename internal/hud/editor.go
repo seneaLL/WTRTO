@@ -424,7 +424,7 @@ func DrawPropertiesPanel(c *native.Canvas, in *native.Input, screenW, screenH in
 	}
 
 	y += 8
-	c.Line([]native.Point{{X: panelX + 16, Y: y}, {X: panelX + PanelWidth - 16, Y: y}}, panelBorder, 1)
+	c.Line([]native.Point{{X: float64(panelX + 16), Y: float64(y)}, {X: float64(panelX + PanelWidth - 16), Y: float64(y)}}, panelBorder, 1)
 	y += 16
 
 	if edit.Selected == "" {

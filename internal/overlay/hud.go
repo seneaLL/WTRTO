@@ -73,7 +73,7 @@ func drawDebugPanel(c *native.Canvas, screenW, screenH int, sampler *metrics.Sam
 	cy := y + 30
 	c.TextBold(x+debugPanelPad, cy, hudText, 13, i18n.T("debug.title"))
 	cy += 14
-	c.Line([]native.Point{{X: x + debugPanelPad, Y: cy}, {X: x + debugPanelWidth - debugPanelPad, Y: cy}}, hudDivider, 1)
+	c.Line([]native.Point{{X: float64(x + debugPanelPad), Y: float64(cy)}, {X: float64(x + debugPanelWidth - debugPanelPad), Y: float64(cy)}}, hudDivider, 1)
 	cy += 22
 
 	cy = metricRow(c, x+debugPanelPad, cy, i18n.T("debug.fps"), "", sampler.FPS.Values(), hudAccent, true)

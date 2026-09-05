@@ -9,7 +9,7 @@ type Rect struct {
 }
 
 type Point struct {
-	X, Y int
+	X, Y float64
 }
 
 func (r Rect) Contains(x, y int) bool {

@@ -555,10 +555,10 @@ func Draw(c *native.Canvas, screenW, screenH int, tmpl *Template, v Values, edit
 			}
 
 			if haveGuideX {
-				c.Line([]native.Point{{X: guideX, Y: 0}, {X: guideX, Y: screenH}}, snapGuideColor, 1)
+				c.Line([]native.Point{{X: float64(guideX), Y: 0}, {X: float64(guideX), Y: float64(screenH)}}, snapGuideColor, 1)
 			}
 			if haveGuideY {
-				c.Line([]native.Point{{X: 0, Y: guideY}, {X: screenW, Y: guideY}}, snapGuideColor, 1)
+				c.Line([]native.Point{{X: 0, Y: float64(guideY)}, {X: float64(screenW), Y: float64(guideY)}}, snapGuideColor, 1)
 			}
 		} else {
 			edit.Dragging = ""
