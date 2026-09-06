@@ -123,11 +123,11 @@ func (t *Tracker) Update(ind *telemetry.Indicators, st telemetry.State) Values {
 	v.Trimmer = ind.Trimmer * 100
 	v.RadioAlt = ind.RadioAltitude
 	v.Turn = ind.Turn
-	v.WingSweep = ind.WingSweepLever * 100
+	v.WingSweep = ind.WingSweepIndicator * 100
 
 	v.SpeedWarning = ind.HasSpeedWarning != 0
 	if lim, ok := limits.Get(ind.Type); ok {
-		sweep := ind.WingSweepLever
+		sweep := ind.WingSweepIndicator
 
 		if maxIASBase := lim.MaxSpeedIASKmh.At(sweep); maxIASBase > 0 {
 			maxIAS := maxIASBase

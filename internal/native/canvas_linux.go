@@ -68,6 +68,10 @@ func (c *Canvas) StrokeRect(r Rect, col Color, width int) {
 }
 
 func roundedPath(cr *C.cairo_t, r Rect, radius int) {
+	roundedPathMask(cr, r, radius, true, true, true, true)
+}
+
+func roundedPathMask(cr *C.cairo_t, r Rect, radius int, tl, tr, br, bl bool) {
 	rad := float64(radius)
 	if max := float64(r.W); rad > max/2 {
 		rad = max / 2
@@ -79,10 +83,35 @@ func roundedPath(cr *C.cairo_t, r Rect, radius int) {
 	deg := C.double(3.14159265358979 / 180.0)
 
 	C.cairo_new_sub_path(cr)
-	C.cairo_arc(cr, C.double(x+w-rad), C.double(y+rad), C.double(rad), -90*deg, 0*deg)
-	C.cairo_arc(cr, C.double(x+w-rad), C.double(y+h-rad), C.double(rad), 0*deg, 90*deg)
-	C.cairo_arc(cr, C.double(x+rad), C.double(y+h-rad), C.double(rad), 90*deg, 180*deg)
-	C.cairo_arc(cr, C.double(x+rad), C.double(y+rad), C.double(rad), 180*deg, 270*deg)
+	if tl {
+		C.cairo_move_to(cr, C.double(x+rad), C.double(y))
+	} else {
+		C.cairo_move_to(cr, C.double(x), C.double(y))
+	}
+	if tr {
+		C.cairo_line_to(cr, C.double(x+w-rad), C.double(y))
+		C.cairo_arc(cr, C.double(x+w-rad), C.double(y+rad), C.double(rad), -90*deg, 0*deg)
+	} else {
+		C.cairo_line_to(cr, C.double(x+w), C.double(y))
+	}
+	if br {
+		C.cairo_line_to(cr, C.double(x+w), C.double(y+h-rad))
+		C.cairo_arc(cr, C.double(x+w-rad), C.double(y+h-rad), C.double(rad), 0*deg, 90*deg)
+	} else {
+		C.cairo_line_to(cr, C.double(x+w), C.double(y+h))
+	}
+	if bl {
+		C.cairo_line_to(cr, C.double(x+rad), C.double(y+h))
+		C.cairo_arc(cr, C.double(x+rad), C.double(y+h-rad), C.double(rad), 90*deg, 180*deg)
+	} else {
+		C.cairo_line_to(cr, C.double(x), C.double(y+h))
+	}
+	if tl {
+		C.cairo_line_to(cr, C.double(x), C.double(y+rad))
+		C.cairo_arc(cr, C.double(x+rad), C.double(y+rad), C.double(rad), 180*deg, 270*deg)
+	} else {
+		C.cairo_line_to(cr, C.double(x), C.double(y))
+	}
 	C.cairo_close_path(cr)
 }
 
@@ -90,6 +119,13 @@ func (c *Canvas) FillRoundedRect(r Rect, radius int, col Color) {
 	cr := c.win.cairoCtx
 	setSource(cr, col)
 	roundedPath(cr, r, radius)
+	C.cairo_fill(cr)
+}
+
+func (c *Canvas) FillRoundedRectCorners(r Rect, radius int, tl, tr, br, bl bool, col Color) {
+	cr := c.win.cairoCtx
+	setSource(cr, col)
+	roundedPathMask(cr, r, radius, tl, tr, br, bl)
 	C.cairo_fill(cr)
 }
 
@@ -106,6 +142,24 @@ func (c *Canvas) FillCircle(cx, cy, radius int, col Color) {
 	cr := c.win.cairoCtx
 	setSource(cr, col)
 	C.cairo_arc(cr, C.double(cx), C.double(cy), C.double(radius), 0, 2*3.14159265358979)
+	C.cairo_fill(cr)
+}
+
+func (c *Canvas) FillPath(subpaths [][]Point, col Color) {
+	cr := c.win.cairoCtx
+	setSource(cr, col)
+	C.cairo_set_fill_rule(cr, C.CAIRO_FILL_RULE_WINDING)
+
+	for _, sp := range subpaths {
+		if len(sp) < 2 {
+			continue
+		}
+		C.cairo_move_to(cr, C.double(sp[0].X), C.double(sp[0].Y))
+		for _, p := range sp[1:] {
+			C.cairo_line_to(cr, C.double(p.X), C.double(p.Y))
+		}
+		C.cairo_close_path(cr)
+	}
 	C.cairo_fill(cr)
 }
 
@@ -156,6 +210,37 @@ func (c *Canvas) Text(x, y int, col Color, size int, s string) {
 
 func (c *Canvas) TextBold(x, y int, col Color, size int, s string) {
 	c.text(x, y, col, size, true, s)
+}
+
+func (c *Canvas) TextCentered(r Rect, col Color, size int, s string) {
+	w := c.win
+	font := w.font(size, false)
+	if font == nil {
+		return
+	}
+	cs := C.CString(s)
+	defer C.free(unsafe.Pointer(cs))
+	var extents C.XGlyphInfo
+	C.XftTextExtentsUtf8(w.display, font, (*C.XftChar8)(unsafe.Pointer(cs)), C.int(len(s)), &extents)
+
+	x := r.X + (r.W-int(extents.width))/2 - int(extents.x)
+	y := r.Y + (r.H-int(extents.height))/2 + int(extents.y)
+	c.text(x, y, col, size, false, s)
+}
+
+func (c *Canvas) TextVCentered(x int, r Rect, col Color, size int, s string) {
+	w := c.win
+	font := w.font(size, false)
+	if font == nil {
+		return
+	}
+	cs := C.CString(s)
+	defer C.free(unsafe.Pointer(cs))
+	var extents C.XGlyphInfo
+	C.XftTextExtentsUtf8(w.display, font, (*C.XftChar8)(unsafe.Pointer(cs)), C.int(len(s)), &extents)
+
+	y := r.Y + (r.H-int(extents.height))/2 + int(extents.y)
+	c.text(x, y, col, size, false, s)
 }
 
 func (c *Canvas) textSize(s string, size int, bold bool) (int, int) {

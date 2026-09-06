@@ -6,20 +6,25 @@ import (
 	"encoding/base64"
 	"encoding/binary"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"hash/crc32"
 	"io"
 	"math"
 	"strings"
 	"time"
+
+	"github.com/seneaLL/WTRTO/internal/i18n"
 )
 
 const ShareCodePrefixV1 = "WTRTO1-"
 
 const ShareCodePrefix = "WTRTO2-"
 
-var ErrInvalidShareCode = errors.New("некорректный код: повреждён или это не код WTRTO")
+type invalidShareCodeErr struct{}
+
+func (invalidShareCodeErr) Error() string { return i18n.T("error.invalid_share_code") }
+
+var ErrInvalidShareCode error = invalidShareCodeErr{}
 
 func EncodeShareCode(t Template) (string, error) {
 	data := encodeTemplateBinary(t)

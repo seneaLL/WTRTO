@@ -8,42 +8,47 @@ import (
 var (
 	gdiplus = syscall.NewLazyDLL("gdiplus.dll")
 
-	procGdiplusStartup               = gdiplus.NewProc("GdiplusStartup")
-	procGdipCreateFromHDC            = gdiplus.NewProc("GdipCreateFromHDC")
-	procGdipCreateBitmapFromScan0    = gdiplus.NewProc("GdipCreateBitmapFromScan0")
-	procGdipGetImageGraphicsContext  = gdiplus.NewProc("GdipGetImageGraphicsContext")
-	procGdipDisposeImage             = gdiplus.NewProc("GdipDisposeImage")
-	procGdipDeleteGraphics           = gdiplus.NewProc("GdipDeleteGraphics")
-	procGdipGraphicsClear            = gdiplus.NewProc("GdipGraphicsClear")
-	procGdipSetSmoothingMode         = gdiplus.NewProc("GdipSetSmoothingMode")
-	procGdipSetTextRenderingHint     = gdiplus.NewProc("GdipSetTextRenderingHint")
-	procGdipSetClipRectI             = gdiplus.NewProc("GdipSetClipRectI")
-	procGdipResetClip                = gdiplus.NewProc("GdipResetClip")
-	procGdipCreateSolidFill          = gdiplus.NewProc("GdipCreateSolidFill")
-	procGdipDeleteBrush              = gdiplus.NewProc("GdipDeleteBrush")
-	procGdipFillRectangleI           = gdiplus.NewProc("GdipFillRectangleI")
-	procGdipCreatePen1               = gdiplus.NewProc("GdipCreatePen1")
-	procGdipDeletePen                = gdiplus.NewProc("GdipDeletePen")
-	procGdipDrawRectangleI           = gdiplus.NewProc("GdipDrawRectangleI")
-	procGdipSetPenLineCap197819      = gdiplus.NewProc("GdipSetPenLineCap197819")
-	procGdipSetPenLineJoin           = gdiplus.NewProc("GdipSetPenLineJoin")
-	procGdipDrawLinesI               = gdiplus.NewProc("GdipDrawLinesI")
-	procGdipFillEllipseI             = gdiplus.NewProc("GdipFillEllipseI")
-	procGdipCreatePath               = gdiplus.NewProc("GdipCreatePath")
-	procGdipDeletePath               = gdiplus.NewProc("GdipDeletePath")
-	procGdipAddPathArcI              = gdiplus.NewProc("GdipAddPathArcI")
-	procGdipClosePathFigure          = gdiplus.NewProc("GdipClosePathFigure")
-	procGdipFillPath                 = gdiplus.NewProc("GdipFillPath")
-	procGdipDrawPath                 = gdiplus.NewProc("GdipDrawPath")
-	procGdipSetClipPath              = gdiplus.NewProc("GdipSetClipPath")
-	procGdipCreateFontFamilyFromName = gdiplus.NewProc("GdipCreateFontFamilyFromName")
-	procGdipCreateFont               = gdiplus.NewProc("GdipCreateFont")
-	procGdipDeleteFont               = gdiplus.NewProc("GdipDeleteFont")
-	procGdipDrawString               = gdiplus.NewProc("GdipDrawString")
-	procGdipMeasureString            = gdiplus.NewProc("GdipMeasureString")
-	procGdipRotateWorldTransform     = gdiplus.NewProc("GdipRotateWorldTransform")
-	procGdipTranslateWorldTransform  = gdiplus.NewProc("GdipTranslateWorldTransform")
-	procGdipResetWorldTransform      = gdiplus.NewProc("GdipResetWorldTransform")
+	procGdiplusStartup                        = gdiplus.NewProc("GdiplusStartup")
+	procGdipCreateFromHDC                     = gdiplus.NewProc("GdipCreateFromHDC")
+	procGdipCreateBitmapFromScan0             = gdiplus.NewProc("GdipCreateBitmapFromScan0")
+	procGdipGetImageGraphicsContext           = gdiplus.NewProc("GdipGetImageGraphicsContext")
+	procGdipDisposeImage                      = gdiplus.NewProc("GdipDisposeImage")
+	procGdipDeleteGraphics                    = gdiplus.NewProc("GdipDeleteGraphics")
+	procGdipGraphicsClear                     = gdiplus.NewProc("GdipGraphicsClear")
+	procGdipSetSmoothingMode                  = gdiplus.NewProc("GdipSetSmoothingMode")
+	procGdipSetTextRenderingHint              = gdiplus.NewProc("GdipSetTextRenderingHint")
+	procGdipSetClipRectI                      = gdiplus.NewProc("GdipSetClipRectI")
+	procGdipResetClip                         = gdiplus.NewProc("GdipResetClip")
+	procGdipCreateSolidFill                   = gdiplus.NewProc("GdipCreateSolidFill")
+	procGdipDeleteBrush                       = gdiplus.NewProc("GdipDeleteBrush")
+	procGdipFillRectangleI                    = gdiplus.NewProc("GdipFillRectangleI")
+	procGdipCreatePen1                        = gdiplus.NewProc("GdipCreatePen1")
+	procGdipDeletePen                         = gdiplus.NewProc("GdipDeletePen")
+	procGdipDrawRectangleI                    = gdiplus.NewProc("GdipDrawRectangleI")
+	procGdipSetPenLineCap197819               = gdiplus.NewProc("GdipSetPenLineCap197819")
+	procGdipSetPenLineJoin                    = gdiplus.NewProc("GdipSetPenLineJoin")
+	procGdipDrawLinesI                        = gdiplus.NewProc("GdipDrawLinesI")
+	procGdipDrawLines                         = gdiplus.NewProc("GdipDrawLines")
+	procGdipFillRectangle                     = gdiplus.NewProc("GdipFillRectangle")
+	procGdipFillEllipseI                      = gdiplus.NewProc("GdipFillEllipseI")
+	procGdipCreatePath                        = gdiplus.NewProc("GdipCreatePath")
+	procGdipDeletePath                        = gdiplus.NewProc("GdipDeletePath")
+	procGdipAddPathArcI                       = gdiplus.NewProc("GdipAddPathArcI")
+	procGdipAddPathLine2                      = gdiplus.NewProc("GdipAddPathLine2")
+	procGdipStartPathFigure                   = gdiplus.NewProc("GdipStartPathFigure")
+	procGdipClosePathFigure                   = gdiplus.NewProc("GdipClosePathFigure")
+	procGdipFillPath                          = gdiplus.NewProc("GdipFillPath")
+	procGdipDrawPath                          = gdiplus.NewProc("GdipDrawPath")
+	procGdipSetClipPath                       = gdiplus.NewProc("GdipSetClipPath")
+	procGdipCreateFontFamilyFromName          = gdiplus.NewProc("GdipCreateFontFamilyFromName")
+	procGdipCreateFont                        = gdiplus.NewProc("GdipCreateFont")
+	procGdipDeleteFont                        = gdiplus.NewProc("GdipDeleteFont")
+	procGdipDrawString                        = gdiplus.NewProc("GdipDrawString")
+	procGdipMeasureString                     = gdiplus.NewProc("GdipMeasureString")
+	procGdipStringFormatGetGenericTypographic = gdiplus.NewProc("GdipStringFormatGetGenericTypographic")
+	procGdipRotateWorldTransform              = gdiplus.NewProc("GdipRotateWorldTransform")
+	procGdipTranslateWorldTransform           = gdiplus.NewProc("GdipTranslateWorldTransform")
+	procGdipResetWorldTransform               = gdiplus.NewProc("GdipResetWorldTransform")
 )
 
 const (
@@ -58,6 +63,7 @@ const (
 	fontStyleBold         = 1
 	matrixOrderPrepend    = 0
 	fillModeAlternate     = 0
+	fillModeWinding       = 1
 	pixelFormat32bppPARGB = 0x000E200B
 )
 
@@ -72,6 +78,8 @@ type gdiplusStartupInput struct {
 type gpRectF struct{ X, Y, W, H float32 }
 
 type gpPointI struct{ X, Y int32 }
+
+type gpPointF struct{ X, Y float32 }
 
 type Canvas struct {
 	win *Window
@@ -219,6 +227,86 @@ func (c *Canvas) FillRoundedRect(r Rect, radius int, col Color) {
 	procGdipFillPath.Call(c.win.graphics, brush, path)
 }
 
+func roundedRectPathMask(r Rect, radius int, tl, tr, br, bl bool) uintptr {
+	if maxR := r.W / 2; radius > maxR {
+		radius = maxR
+	}
+	if maxR := r.H / 2; radius > maxR {
+		radius = maxR
+	}
+	d := radius * 2
+	x, y, w, h := r.X, r.Y, r.W, r.H
+
+	var path uintptr
+	procGdipCreatePath.Call(fillModeAlternate, uintptr(unsafe.Pointer(&path)))
+
+	line := func(x1, y1, x2, y2 int) {
+		pts := []gpPointF{{X: float32(x1), Y: float32(y1)}, {X: float32(x2), Y: float32(y2)}}
+		procGdipAddPathLine2.Call(path, uintptr(unsafe.Pointer(&pts[0])), 2)
+	}
+
+	topStartX, topEndX := x, x+w
+	if tl {
+		topStartX = x + radius
+	}
+	if tr {
+		topEndX = x + w - radius
+	}
+	line(topStartX, y, topEndX, y)
+	if tr {
+		procGdipAddPathArcI.Call(path, uintptr(x+w-d), uintptr(y), uintptr(d), uintptr(d), floatBits(-90), floatBits(90))
+	}
+
+	rightStartY, rightEndY := y, y+h
+	if tr {
+		rightStartY = y + radius
+	}
+	if br {
+		rightEndY = y + h - radius
+	}
+	line(x+w, rightStartY, x+w, rightEndY)
+	if br {
+		procGdipAddPathArcI.Call(path, uintptr(x+w-d), uintptr(y+h-d), uintptr(d), uintptr(d), floatBits(0), floatBits(90))
+	}
+
+	bottomStartX, bottomEndX := x+w, x
+	if br {
+		bottomStartX = x + w - radius
+	}
+	if bl {
+		bottomEndX = x + radius
+	}
+	line(bottomStartX, y+h, bottomEndX, y+h)
+	if bl {
+		procGdipAddPathArcI.Call(path, uintptr(x), uintptr(y+h-d), uintptr(d), uintptr(d), floatBits(90), floatBits(90))
+	}
+
+	leftStartY, leftEndY := y+h, y
+	if bl {
+		leftStartY = y + h - radius
+	}
+	if tl {
+		leftEndY = y + radius
+	}
+	line(x, leftStartY, x, leftEndY)
+	if tl {
+		procGdipAddPathArcI.Call(path, uintptr(x), uintptr(y), uintptr(d), uintptr(d), floatBits(180), floatBits(90))
+	}
+
+	procGdipClosePathFigure.Call(path)
+
+	return path
+}
+
+func (c *Canvas) FillRoundedRectCorners(r Rect, radius int, tl, tr, br, bl bool, col Color) {
+	path := roundedRectPathMask(r, radius, tl, tr, br, bl)
+	defer procGdipDeletePath.Call(path)
+
+	brush := c.brushFor(col)
+
+	procGdipFillPath.Call(c.win.graphics, brush, path)
+}
+
 func (c *Canvas) StrokeRoundedRect(r Rect, radius int, col Color, width int) {
 	half := width / 2
 	inset := Rect{X: r.X + half, Y: r.Y + half, W: r.W - 2*half, H: r.H - 2*half}
@@ -236,6 +324,28 @@ func (c *Canvas) FillCircle(cx, cy, radius int, col Color) {
 	procGdipFillEllipseI.Call(c.win.graphics, brush, uintptr(cx-radius), uintptr(cy-radius), uintptr(radius*2), uintptr(radius*2))
 }
 
+func (c *Canvas) FillPath(subpaths [][]Point, col Color) {
+	var path uintptr
+	procGdipCreatePath.Call(fillModeWinding, uintptr(unsafe.Pointer(&path)))
+	defer procGdipDeletePath.Call(path)
+
+	for _, sp := range subpaths {
+		if len(sp) < 2 {
+			continue
+		}
+		pts := make([]gpPointF, len(sp))
+		for i, p := range sp {
+			pts[i] = gpPointF{X: float32(p.X), Y: float32(p.Y)}
+		}
+		procGdipStartPathFigure.Call(path)
+		procGdipAddPathLine2.Call(path, uintptr(unsafe.Pointer(&pts[0])), uintptr(len(pts)))
+		procGdipClosePathFigure.Call(path)
+	}
+
+	brush := c.brushFor(col)
+	procGdipFillPath.Call(c.win.graphics, brush, path)
+}
+
 func (c *Canvas) Line(points []Point, col Color, width int) {
 	if len(points) < 2 {
 		return
@@ -246,12 +356,12 @@ func (c *Canvas) Line(points []Point, col Color, width int) {
 	procGdipSetPenLineCap197819.Call(pen, lineCapRound, lineCapRound, lineCapRound)
 	procGdipSetPenLineJoin.Call(pen, lineJoinRound)
 
-	pts := make([]gpPointI, len(points))
+	pts := make([]gpPointF, len(points))
 	for i, p := range points {
-		pts[i] = gpPointI{X: int32(p.X), Y: int32(p.Y)}
+		pts[i] = gpPointF{X: float32(p.X), Y: float32(p.Y)}
 	}
 
-	procGdipDrawLinesI.Call(c.win.graphics, pen, uintptr(unsafe.Pointer(&pts[0])), uintptr(len(pts)))
+	procGdipDrawLines.Call(c.win.graphics, pen, uintptr(unsafe.Pointer(&pts[0])), uintptr(len(pts)))
 }
 
 func (c *Canvas) fontFor(size int, bold bool) uintptr {
@@ -359,6 +469,98 @@ func (c *Canvas) TextSize(s string, size int) (int, int) {
 	return c.textSize(s, size, false)
 }
 
+var typographicFormat uintptr
+
+func genericTypographicFormat() uintptr {
+	if typographicFormat == 0 {
+		procGdipStringFormatGetGenericTypographic.Call(uintptr(unsafe.Pointer(&typographicFormat)))
+	}
+
+	return typographicFormat
+}
+
+func (c *Canvas) TextCentered(r Rect, col Color, size int, s string) {
+	font := c.fontFor(size, false)
+	if font == 0 {
+		return
+	}
+
+	utf16Str, err := syscall.UTF16FromString(s)
+	if err != nil {
+		return
+	}
+	utf16Str = utf16Str[:len(utf16Str)-1]
+	if len(utf16Str) == 0 {
+		return
+	}
+
+	format := genericTypographicFormat()
+
+	measureRc := gpRectF{X: 0, Y: 0, W: 4000, H: float32(size) * 3}
+	var bbox gpRectF
+	var charsFitted, linesFilled int32
+	procGdipMeasureString.Call(
+		c.win.graphics,
+		uintptr(unsafe.Pointer(&utf16Str[0])), uintptr(len(utf16Str)),
+		font, uintptr(unsafe.Pointer(&measureRc)), format,
+		uintptr(unsafe.Pointer(&bbox)), uintptr(unsafe.Pointer(&charsFitted)), uintptr(unsafe.Pointer(&linesFilled)),
+	)
+
+	brush := c.brushFor(col)
+	drawRc := gpRectF{
+		X: float32(r.X) + (float32(r.W)-bbox.W)/2 - bbox.X,
+		Y: float32(r.Y) + (float32(r.H)-bbox.H)/2 - bbox.Y,
+		W: 4000,
+		H: float32(size) * 3,
+	}
+	procGdipDrawString.Call(
+		c.win.graphics,
+		uintptr(unsafe.Pointer(&utf16Str[0])), uintptr(len(utf16Str)),
+		font, uintptr(unsafe.Pointer(&drawRc)), format, brush,
+	)
+}
+
+func (c *Canvas) TextVCentered(x int, r Rect, col Color, size int, s string) {
+	font := c.fontFor(size, false)
+	if font == 0 {
+		return
+	}
+
+	utf16Str, err := syscall.UTF16FromString(s)
+	if err != nil {
+		return
+	}
+	utf16Str = utf16Str[:len(utf16Str)-1]
+	if len(utf16Str) == 0 {
+		return
+	}
+
+	format := genericTypographicFormat()
+
+	measureRc := gpRectF{X: 0, Y: 0, W: 4000, H: float32(size) * 3}
+	var bbox gpRectF
+	var charsFitted, linesFilled int32
+	procGdipMeasureString.Call(
+		c.win.graphics,
+		uintptr(unsafe.Pointer(&utf16Str[0])), uintptr(len(utf16Str)),
+		font, uintptr(unsafe.Pointer(&measureRc)), format,
+		uintptr(unsafe.Pointer(&bbox)), uintptr(unsafe.Pointer(&charsFitted)), uintptr(unsafe.Pointer(&linesFilled)),
+	)
+
+	brush := c.brushFor(col)
+	drawRc := gpRectF{
+		X: float32(x) - bbox.X,
+		Y: float32(r.Y) + (float32(r.H)-bbox.H)/2 - bbox.Y,
+		W: 4000,
+		H: float32(size) * 3,
+	}
+	procGdipDrawString.Call(
+		c.win.graphics,
+		uintptr(unsafe.Pointer(&utf16Str[0])), uintptr(len(utf16Str)),
+		font, uintptr(unsafe.Pointer(&drawRc)), format, brush,
+	)
+}
+
 func (c *Canvas) TextSizeBold(s string, size int) (int, int) {
 	return c.textSize(s, size, true)
 }
@@ -376,18 +578,18 @@ func (c *Canvas) DrawArtificialHorizon(cx, cy, radius int, pitchDeg, rollDeg flo
 	procGdipTranslateWorldTransform.Call(g, floatBits(float32(cx)), floatBits(float32(cy)), matrixOrderPrepend)
 	procGdipRotateWorldTransform.Call(g, floatBits(float32(-rollDeg)), matrixOrderPrepend)
 
-	big := radius * 3
-	pitchOffset := int(pitchDeg / 90.0 * float64(radius))
+	big := float64(radius * 3)
+	pitchOffset := pitchDeg / 90.0 * float64(radius)
 
 	skyBrush := c.brushFor(sky)
 	groundBrush := c.brushFor(ground)
 
-	procGdipFillRectangleI.Call(g, skyBrush, uintptr(-big), uintptr(-big+pitchOffset), uintptr(2*big), uintptr(big))
-	procGdipFillRectangleI.Call(g, groundBrush, uintptr(-big), uintptr(pitchOffset), uintptr(2*big), uintptr(big))
+	procGdipFillRectangle.Call(g, skyBrush, floatBits(float32(-big)), floatBits(float32(-big+pitchOffset)), floatBits(float32(2*big)), floatBits(float32(big)))
+	procGdipFillRectangle.Call(g, groundBrush, floatBits(float32(-big)), floatBits(float32(pitchOffset)), floatBits(float32(2*big)), floatBits(float32(big)))
 
 	linePen := c.penFor(line, 2)
-	horizonPts := []gpPointI{{X: int32(-big), Y: int32(pitchOffset)}, {X: int32(big), Y: int32(pitchOffset)}}
-	procGdipDrawLinesI.Call(g, linePen, uintptr(unsafe.Pointer(&horizonPts[0])), 2)
+	horizonPts := []gpPointF{{X: float32(-big), Y: float32(pitchOffset)}, {X: float32(big), Y: float32(pitchOffset)}}
+	procGdipDrawLines.Call(g, linePen, uintptr(unsafe.Pointer(&horizonPts[0])), 2)
 
 	procGdipResetWorldTransform.Call(g)
 	procGdipResetClip.Call(g)

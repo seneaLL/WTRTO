@@ -81,22 +81,37 @@ func tickValueAt(offsetPx, value, pxPerUnit, dirMul float64) float64 {
 
 const spineSegmentPx = 4
 
-func arcPointV(cx, cy, radius, sign int, theta float64, extra int) (int, int) {
+func arcPointV(cx, cy, radius, sign int, theta float64, extra int) (float64, float64) {
 	r := float64(radius + extra)
 	cxF := float64(cx) - float64(sign*radius)
 	x := cxF + r*math.Cos(theta)*float64(sign)
 	y := float64(cy) + r*math.Sin(theta)
 
-	return int(x), int(y)
+	return x, y
 }
 
-func arcPointH(cx, cy, radius int, theta float64, extra int) (int, int) {
+func arcPointH(cx, cy, radius int, theta float64, extra int) (float64, float64) {
 	r := float64(radius + extra)
 	cyF := float64(cy) + float64(radius)
 	x := float64(cx) + r*math.Sin(theta)
 	y := cyF - r*math.Cos(theta)
 
-	return int(x), int(y)
+	return x, y
+}
+
+func tapeVSign(e Element) int {
+	switch e.LabelSide {
+	case SideLeft:
+		return 1
+	case SideRight:
+		return -1
+	default:
+		if e.X >= 0.5 {
+			return -1
+		}
+
+		return 1
+	}
 }
 
 func drawTapeV(c *native.Canvas, cx, cy, lengthPx int, value float64, e Element, v Values, baseCol native.Color) {
@@ -112,17 +127,7 @@ func drawTapeV(c *native.Canvas, cx, cy, lengthPx int, value float64, e Element,
 		fontSize = 13
 	}
 
-	sign := 1
-	switch e.LabelSide {
-	case SideLeft:
-		sign = 1
-	case SideRight:
-		sign = -1
-	default:
-		if e.X >= 0.5 {
-			sign = -1
-		}
-	}
+	sign := tapeVSign(e)
 
 	dirMul := 1.0
 	if e.Direction == DirDown {
@@ -133,7 +138,7 @@ func drawTapeV(c *native.Canvas, cx, cy, lengthPx int, value float64, e Element,
 	radius := lengthPx / 2
 
 	if arc {
-		prevX, prevY, havePrev := 0, 0, false
+		prevX, prevY, havePrev := 0.0, 0.0, false
 		for t := -float64(lengthPx / 2); t <= float64(lengthPx/2); t += spineSegmentPx {
 			x, y := arcPointV(cx, cy, radius, sign, t/float64(radius), 0)
 			if havePrev {
@@ -149,7 +154,7 @@ func drawTapeV(c *native.Canvas, cx, cy, lengthPx int, value float64, e Element,
 				py2 = lengthPx / 2
 			}
 			segCol := tapeZoneColor(e, v, tickValueAt(float64(py)+spineSegmentPx/2, value, pxPerUnit, dirMul), baseCol)
-			c.Line([]native.Point{{X: cx, Y: cy + py}, {X: cx, Y: cy + py2}}, segCol, thickness)
+			c.Line([]native.Point{{X: float64(cx), Y: float64(cy + py)}, {X: float64(cx), Y: float64(cy + py2)}}, segCol, thickness)
 		}
 	}
 
@@ -171,27 +176,28 @@ func drawTapeV(c *native.Canvas, cx, cy, lengthPx int, value float64, e Element,
 			tickLen = 14
 		}
 
-		var tx1, ty1, tx2, ty2, lx, ly int
+		var tx1, ty1, tx2, ty2, lx, ly float64
 		if arc {
 			theta := offset / float64(radius)
 			tx1, ty1 = arcPointV(cx, cy, radius, sign, theta, 0)
 			tx2, ty2 = arcPointV(cx, cy, radius, sign, theta, tickLen)
 			lx, ly = arcPointV(cx, cy, radius, sign, theta, tickLen+6)
 		} else {
-			ty := cy + int(offset)
-			tx1, ty1 = cx, ty
-			tx2, ty2 = cx+sign*tickLen, ty
-			lx, ly = cx+sign*(tickLen+6), ty
+			ty := float64(cy) + offset
+			tx1, ty1 = float64(cx), ty
+			tx2, ty2 = float64(cx+sign*tickLen), ty
+			lx, ly = float64(cx+sign*(tickLen+6)), ty
 		}
 		c.Line([]native.Point{{X: tx1, Y: ty1}, {X: tx2, Y: ty2}}, tickCol, thickness)
 
 		if major {
 			label := fmt.Sprintf("%.0f", display)
 			w, h := c.TextSize(label, fontSize)
+			lxi := int(math.Round(lx))
 			if sign < 0 {
-				lx -= w
+				lxi -= w
 			}
-			c.Text(lx, ly+h/2-2, tickCol, fontSize, label)
+			c.Text(lxi, int(math.Round(ly))+h/2-2, tickCol, fontSize, label)
 		}
 	}
 
@@ -206,7 +212,7 @@ func drawTapeV(c *native.Canvas, cx, cy, lengthPx int, value float64, e Element,
 	boxRect := native.Rect{X: boxX, Y: cy - boxH/2, W: boxW, H: boxH}
 	c.FillRect(boxRect, native.Color{R: 10, G: 12, B: 15, A: 220})
 	c.StrokeRect(boxRect, col, thickness+1)
-	c.Text(boxRect.X+8, cy+bh/2-2, col, fontSize+2, boxLabel)
+	c.TextCentered(boxRect, col, fontSize+2, boxLabel)
 }
 
 func drawTapeH(c *native.Canvas, cx, cy, lengthPx int, value float64, e Element, v Values, baseCol native.Color) {
@@ -231,7 +237,7 @@ func drawTapeH(c *native.Canvas, cx, cy, lengthPx int, value float64, e Element,
 	radius := lengthPx / 2
 
 	if arc {
-		prevX, prevY, havePrev := 0, 0, false
+		prevX, prevY, havePrev := 0.0, 0.0, false
 		for t := -float64(lengthPx / 2); t <= float64(lengthPx/2); t += spineSegmentPx {
 			x, y := arcPointH(cx, cy, radius, t/float64(radius), 0)
 			if havePrev {
@@ -247,7 +253,7 @@ func drawTapeH(c *native.Canvas, cx, cy, lengthPx int, value float64, e Element,
 				px2 = lengthPx / 2
 			}
 			segCol := tapeZoneColor(e, v, tickValueAt(float64(px)+spineSegmentPx/2, value, pxPerUnit, dirMul), baseCol)
-			c.Line([]native.Point{{X: cx + px, Y: cy}, {X: cx + px2, Y: cy}}, segCol, thickness)
+			c.Line([]native.Point{{X: float64(cx + px), Y: float64(cy)}, {X: float64(cx + px2), Y: float64(cy)}}, segCol, thickness)
 		}
 	}
 
@@ -269,33 +275,33 @@ func drawTapeH(c *native.Canvas, cx, cy, lengthPx int, value float64, e Element,
 			tickLen = 14
 		}
 
-		var tx1, ty1, tx2, ty2, lx, ly int
+		var tx1, ty1, tx2, ty2, lx, ly float64
 		if arc {
 			theta := offset / float64(radius)
 			tx1, ty1 = arcPointH(cx, cy, radius, theta, 0)
 			tx2, ty2 = arcPointH(cx, cy, radius, theta, tickLen)
 			lx, ly = arcPointH(cx, cy, radius, theta, tickLen+6)
 		} else {
-			tx := cx + int(offset)
-			tx1, ty1 = tx, cy
-			tx2, ty2 = tx, cy-tickLen
-			lx, ly = tx, cy-tickLen-6
+			tx := float64(cx) + offset
+			tx1, ty1 = tx, float64(cy)
+			tx2, ty2 = tx, float64(cy-tickLen)
+			lx, ly = tx, float64(cy-tickLen-6)
 		}
 		c.Line([]native.Point{{X: tx1, Y: ty1}, {X: tx2, Y: ty2}}, tickCol, thickness)
 
 		if major {
 			label := fmt.Sprintf("%.0f", display)
 			w, _ := c.TextSize(label, fontSize)
-			c.Text(lx-w/2, ly, tickCol, fontSize, label)
+			c.Text(int(math.Round(lx))-w/2, int(math.Round(ly)), tickCol, fontSize, label)
 		}
 	}
 
-	c.Line([]native.Point{{X: cx, Y: cy + 4}, {X: cx - 8, Y: cy + 16}, {X: cx + 8, Y: cy + 16}, {X: cx, Y: cy + 4}}, col, thickness+1)
+	c.Line([]native.Point{{X: float64(cx), Y: float64(cy + 4)}, {X: float64(cx - 8), Y: float64(cy + 16)}, {X: float64(cx + 8), Y: float64(cy + 16)}, {X: float64(cx), Y: float64(cy + 4)}}, col, thickness+1)
 
 	boxLabel := fmt.Sprintf("%.0f", wrapValue(value, e.Wrap))
 	bw, bh := c.TextSize(boxLabel, fontSize+2)
 	boxRect := native.Rect{X: cx - bw/2 - 8, Y: cy - bh - 22, W: bw + 16, H: bh + 10}
 	c.FillRect(boxRect, native.Color{R: 10, G: 12, B: 15, A: 220})
 	c.StrokeRect(boxRect, col, thickness+1)
-	c.Text(boxRect.X+8, boxRect.Y+bh+2, col, fontSize+2, boxLabel)
+	c.TextCentered(boxRect, col, fontSize+2, boxLabel)
 }

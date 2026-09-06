@@ -2,12 +2,13 @@ package hud
 
 import (
 	"encoding/json"
-	"errors"
 	"os"
 	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
+
+	"github.com/seneaLL/WTRTO/internal/i18n"
 )
 
 var slugRe = regexp.MustCompile(`[^a-z0-9]+`)
@@ -152,7 +153,11 @@ func Export(t Template, destPath string) error {
 	return saveFile(destPath, t)
 }
 
-var errBuiltinTemplate = errors.New("стандартный шаблон нельзя удалить, сначала скопируйте его")
+type builtinTemplateErr struct{}
+
+func (builtinTemplateErr) Error() string { return i18n.T("error.builtin_template_delete") }
+
+var errBuiltinTemplate error = builtinTemplateErr{}
 
 func Delete(name string) error {
 	if IsBuiltin(name) {

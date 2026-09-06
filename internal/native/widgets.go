@@ -4,6 +4,7 @@ import (
 	"strconv"
 
 	"github.com/seneaLL/WTRTO/internal/clipboard"
+	"github.com/seneaLL/WTRTO/internal/native/icons"
 )
 
 const (
@@ -45,10 +46,115 @@ func Button(c *Canvas, in *Input, r Rect, label string, bg, bgHover, textCol Col
 	}
 	c.FillRoundedRect(r, RadiusSmall, col)
 
-	label, tw, th := fitText(c, label, fontSize, r.W-12)
-	c.Text(r.X+(r.W-tw)/2, r.Y+(r.H+th)/2-2, textCol, fontSize, label)
+	label, _, _ = fitText(c, label, fontSize, r.W-12)
+	c.TextCentered(r, textCol, fontSize, label)
 
 	return hover && in.Released
+}
+
+var vectorIcons = map[string]bool{
+	"check": true, "arrow-left": true, "arrow-right": true,
+	"arrow-up": true, "arrow-down": true, "center-h": true, "center-v": true,
+}
+
+func drawIcon(c *Canvas, r Rect, kind string, col Color, thickness int) {
+	cx, cy := float64(r.X)+float64(r.W)/2, float64(r.Y)+float64(r.H)/2
+	s := float64(r.W)
+	if r.H < r.W {
+		s = float64(r.H)
+	}
+	s *= 0.5
+
+	switch kind {
+	case "check":
+		c.Line([]Point{
+			{X: cx - s*0.5, Y: cy},
+			{X: cx - s*0.15, Y: cy + s*0.4},
+			{X: cx + s*0.5, Y: cy - s*0.4},
+		}, col, thickness)
+	case "arrow-right":
+		c.Line([]Point{{X: cx - s*0.5, Y: cy}, {X: cx + s*0.15, Y: cy}}, col, thickness)
+		c.Line([]Point{
+			{X: cx - s*0.15, Y: cy - s*0.35},
+			{X: cx + s*0.5, Y: cy},
+			{X: cx - s*0.15, Y: cy + s*0.35},
+		}, col, thickness)
+	case "arrow-left":
+		c.Line([]Point{{X: cx + s*0.5, Y: cy}, {X: cx - s*0.15, Y: cy}}, col, thickness)
+		c.Line([]Point{
+			{X: cx + s*0.15, Y: cy - s*0.35},
+			{X: cx - s*0.5, Y: cy},
+			{X: cx + s*0.15, Y: cy + s*0.35},
+		}, col, thickness)
+	case "arrow-up":
+		c.Line([]Point{{X: cx, Y: cy + s*0.5}, {X: cx, Y: cy - s*0.15}}, col, thickness)
+		c.Line([]Point{
+			{X: cx - s*0.35, Y: cy + s*0.15},
+			{X: cx, Y: cy - s*0.5},
+			{X: cx + s*0.35, Y: cy + s*0.15},
+		}, col, thickness)
+	case "arrow-down":
+		c.Line([]Point{{X: cx, Y: cy - s*0.5}, {X: cx, Y: cy + s*0.15}}, col, thickness)
+		c.Line([]Point{
+			{X: cx - s*0.35, Y: cy - s*0.15},
+			{X: cx, Y: cy + s*0.5},
+			{X: cx + s*0.35, Y: cy - s*0.15},
+		}, col, thickness)
+	case "center-h":
+		c.Line([]Point{{X: cx - s*0.2, Y: cy}, {X: cx + s*0.2, Y: cy}}, col, thickness)
+		c.Line([]Point{
+			{X: cx - s*0.2, Y: cy - s*0.25},
+			{X: cx - s*0.5, Y: cy},
+			{X: cx - s*0.2, Y: cy + s*0.25},
+		}, col, thickness)
+		c.Line([]Point{
+			{X: cx + s*0.2, Y: cy - s*0.25},
+			{X: cx + s*0.5, Y: cy},
+			{X: cx + s*0.2, Y: cy + s*0.25},
+		}, col, thickness)
+	case "center-v":
+		c.Line([]Point{{X: cx, Y: cy - s*0.2}, {X: cx, Y: cy + s*0.2}}, col, thickness)
+		c.Line([]Point{
+			{X: cx - s*0.25, Y: cy - s*0.2},
+			{X: cx, Y: cy - s*0.5},
+			{X: cx + s*0.25, Y: cy - s*0.2},
+		}, col, thickness)
+		c.Line([]Point{
+			{X: cx - s*0.25, Y: cy + s*0.2},
+			{X: cx, Y: cy + s*0.5},
+			{X: cx + s*0.25, Y: cy + s*0.2},
+		}, col, thickness)
+	}
+}
+
+func IconButton(c *Canvas, in *Input, r Rect, icon string, bg, bgHover, textCol Color, fontSize int) (clicked, hover bool) {
+	return iconButtonInset(c, in, r, icon, bg, bgHover, textCol, fontSize, 1.0/6)
+}
+
+func iconButtonInset(c *Canvas, in *Input, r Rect, icon string, bg, bgHover, textCol Color, fontSize int, insetFrac float64) (clicked, hover bool) {
+	return iconButtonCorners(c, in, r, icon, bg, bgHover, textCol, fontSize, insetFrac, true, true, true, true)
+}
+
+func iconButtonCorners(c *Canvas, in *Input, r Rect, icon string, bg, bgHover, textCol Color, fontSize int, insetFrac float64, tl, tr, br, bl bool) (clicked, hover bool) {
+	hover = r.Contains(in.MouseX, in.MouseY)
+	col := bg
+	if hover {
+		col = bgHover
+	}
+	c.FillRoundedRectCorners(r, RadiusSmall, tl, tr, br, bl, col)
+
+	switch {
+	case svgIcons[icon] != nil:
+		insetX, insetY := int(float64(r.W)*insetFrac), int(float64(r.H)*insetFrac)
+		pad := Rect{X: r.X + insetX, Y: r.Y + insetY, W: r.W - 2*insetX, H: r.H - 2*insetY}
+		drawSVGIcon(c, pad, svgIcons[icon], textCol)
+	case vectorIcons[icon]:
+		drawIcon(c, r, icon, textCol, 2)
+	default:
+		c.TextCentered(r, textCol, fontSize, icon)
+	}
+
+	return hover && in.Released, hover
 }
 
 func Checkbox(c *Canvas, in *Input, r Rect, checked bool, boxCol, checkCol, textCol Color, fontSize int, label string) bool {
@@ -59,8 +165,7 @@ func Checkbox(c *Canvas, in *Input, r Rect, checked bool, boxCol, checkCol, text
 		inset := Rect{X: box.X + 4, Y: box.Y + 4, W: box.W - 8, H: box.H - 8}
 		c.FillRoundedRect(inset, RadiusSmall-4, checkCol)
 	}
-	_, th := c.TextSize(label, fontSize)
-	c.Text(box.X+box.W+12, box.Y+(box.H+th)/2-2, textCol, fontSize, label)
+	c.TextVCentered(box.X+box.W+12, box, textCol, fontSize, label)
 
 	return hover && in.Released
 }
@@ -203,12 +308,12 @@ func NumberStepper(c *Canvas, in *Input, r Rect, value, step float64, precision 
 	newValue = value
 	mult := StepMultiplier(in)
 
-	if Button(c, in, minusRect, "-", bg, bgHover, textCol, fontSize) {
+	if clicked, _ := iconButtonCorners(c, in, minusRect, "minus", bg, bgHover, textCol, fontSize, 0.3, true, false, false, true); clicked {
 		newValue -= step * mult
 		stepped = true
 	}
 
-	if Button(c, in, plusRect, "+", bg, bgHover, textCol, fontSize) {
+	if clicked, _ := iconButtonCorners(c, in, plusRect, "plus", bg, bgHover, textCol, fontSize, 0.3, false, true, true, false); clicked {
 		newValue += step * mult
 		stepped = true
 	}
@@ -219,11 +324,9 @@ func NumberStepper(c *Canvas, in *Input, r Rect, value, step float64, precision 
 		midCol = bgHover
 	}
 	c.FillRect(midRect, midCol)
-	borderCol := textCol
 	if editing {
-		borderCol = focusCol
+		c.StrokeRect(midRect, focusCol, 1)
 	}
-	c.StrokeRect(midRect, borderCol, 1)
 
 	buf = editBuf
 	c.ClipRect(Rect{X: midRect.X + 2, Y: midRect.Y, W: midRect.W - 4, H: midRect.H})
@@ -231,24 +334,24 @@ func NumberStepper(c *Canvas, in *Input, r Rect, value, step float64, precision 
 		submitted, clipErr = applyTextEditKeys(in, &buf, cursor, selectedAll)
 
 		runes := []rune(buf)
-		tw, th := c.TextSize(buf, fontSize)
+		tw, _ := c.TextSize(buf, fontSize)
 		tx := midRect.X + (midRect.W-tw)/2
 
 		if *selectedAll && buf != "" {
 			drawSelectionHighlight(c, Rect{X: tx, Y: midRect.Y, W: tw, H: midRect.H}, tw)
 		}
 
-		c.Text(tx, midRect.Y+(midRect.H+th)/2-2, textCol, fontSize, buf)
+		c.TextVCentered(tx, midRect, textCol, fontSize, buf)
 
 		if !*selectedAll {
 			cw, _ := c.TextSize(string(runes[:*cursor]), fontSize)
 			cx := tx + cw
-			c.Line([]Point{{X: cx, Y: midRect.Y + 4}, {X: cx, Y: midRect.Y + midRect.H - 4}}, focusCol, 2)
+			c.Line([]Point{{X: float64(cx), Y: float64(midRect.Y + 4)}, {X: float64(cx), Y: float64(midRect.Y + midRect.H - 4)}}, focusCol, 2)
 		}
 	} else {
 		label := strconv.FormatFloat(value, 'f', precision, 64)
-		tw, th := c.TextSize(label, fontSize)
-		c.Text(midRect.X+(midRect.W-tw)/2, midRect.Y+(midRect.H+th)/2-2, textCol, fontSize, label)
+		tw, _ := c.TextSize(label, fontSize)
+		c.TextVCentered(midRect.X+(midRect.W-tw)/2, midRect, textCol, fontSize, label)
 	}
 	c.Unclip()
 
@@ -281,7 +384,7 @@ func TextInput(c *Canvas, in *Input, r Rect, value string, focused bool, cursor 
 		*cursor = 0
 	}
 
-	tw, th := c.TextSize(newValue, fontSize)
+	tw, _ := c.TextSize(newValue, fontSize)
 	avail := r.W - 16
 	cursorW, _ := c.TextSize(string(runes[:*cursor]), fontSize)
 	tx := r.X + 8
@@ -313,11 +416,11 @@ func TextInput(c *Canvas, in *Input, r Rect, value string, focused bool, cursor 
 	}
 
 	c.ClipRect(Rect{X: r.X + 2, Y: r.Y, W: r.W - 4, H: r.H})
-	c.Text(tx, r.Y+(r.H+th)/2-2, textCol, fontSize, newValue)
+	c.TextVCentered(tx, r, textCol, fontSize, newValue)
 
 	if focused && !*selectedAll {
 		cx := tx + cursorW
-		c.Line([]Point{{X: cx, Y: r.Y + 4}, {X: cx, Y: r.Y + r.H - 4}}, focusCol, 2)
+		c.Line([]Point{{X: float64(cx), Y: float64(r.Y + 4)}, {X: float64(cx), Y: float64(r.Y + r.H - 4)}}, focusCol, 2)
 	}
 
 	c.Unclip()
@@ -341,43 +444,6 @@ func cursorIndexForClick(c *Canvas, value string, fontSize int, offsetX int) int
 	return len(runes)
 }
 
-func ColorSliders(c *Canvas, in *Input, r Rect, col Color) Color {
-	rowH := r.H / 4
-	col.R = uint8(colorSlider(c, in, Rect{X: r.X, Y: r.Y, W: r.W, H: rowH - 2}, float64(col.R), Color{R: 220, G: 80, B: 80, A: 255}))
-	col.G = uint8(colorSlider(c, in, Rect{X: r.X, Y: r.Y + rowH, W: r.W, H: rowH - 2}, float64(col.G), Color{R: 80, G: 200, B: 100, A: 255}))
-	col.B = uint8(colorSlider(c, in, Rect{X: r.X, Y: r.Y + 2*rowH, W: r.W, H: rowH - 2}, float64(col.B), Color{R: 90, G: 140, B: 230, A: 255}))
-	col.A = uint8(colorSlider(c, in, Rect{X: r.X, Y: r.Y + 3*rowH, W: r.W, H: rowH - 2}, float64(col.A), Color{R: 200, G: 200, B: 200, A: 255}))
-
-	return col
-}
-
-func colorSlider(c *Canvas, in *Input, r Rect, value float64, trackCol Color) float64 {
-	c.FillRoundedRect(r, 3, Color{R: 40, G: 42, B: 48, A: 255})
-	if value < 0 {
-		value = 0
-	}
-	if value > 255 {
-		value = 255
-	}
-	frac := value / 255
-	handleX := r.X + int(frac*float64(r.W))
-	if handleX > r.X {
-		c.FillRect(Rect{X: r.X, Y: r.Y, W: handleX - r.X, H: r.H}, trackCol)
-	}
-	if in.MouseDown && r.Contains(in.MouseX, in.MouseY) {
-		nf := float64(in.MouseX-r.X) / float64(r.W)
-		if nf < 0 {
-			nf = 0
-		}
-		if nf > 1 {
-			nf = 1
-		}
-		value = nf * 255
-	}
-
-	return value
-}
-
 const SelectRowHeight = 26
 
 func SelectBox(c *Canvas, in *Input, r Rect, current string, open bool, bg, bgHover, textCol Color, fontSize int) bool {
@@ -388,20 +454,24 @@ func SelectBox(c *Canvas, in *Input, r Rect, current string, open bool, bg, bgHo
 	}
 	c.FillRoundedRect(r, RadiusSmall, col)
 
-	arrow := "v"
-	if open {
-		arrow = "^"
-	}
-	aw, th := c.TextSize(arrow, fontSize)
+	caretW := 20
 
-	label, _, _ := fitText(c, current, fontSize, r.W-20-aw-10)
-	c.Text(r.X+10, r.Y+(r.H+th)/2-2, textCol, fontSize, label)
-	c.Text(r.X+r.W-aw-10, r.Y+(r.H+th)/2-2, textCol, fontSize, arrow)
+	label, _, _ := fitText(c, current, fontSize, r.W-20-caretW-10)
+	c.TextVCentered(r.X+10, r, textCol, fontSize, label)
+
+	caretRect := Rect{X: r.X + r.W - caretW - 10, Y: r.Y, W: caretW, H: r.H}
+	caret := icons.IconCaretDown
+	if open {
+		caret = flipY(caret)
+	}
+	drawSVGIcon(c, caretRect, caret, textCol)
 
 	return hover && in.Released
 }
 
 const SelectMaxVisibleRows = 8
+
+const selectListBottomMargin = 12
 
 func SelectListBounds(headerRect Rect, optionCount, containerH int) Rect {
 	rows := optionCount
@@ -410,12 +480,17 @@ func SelectListBounds(headerRect Rect, optionCount, containerH int) Rect {
 	}
 	h := rows * SelectRowHeight
 
+	limit := containerH - selectListBottomMargin
+
 	y := headerRect.Y + headerRect.H
-	if containerH > 0 && y+h > containerH {
-		if up := headerRect.Y - h; up >= 0 {
-			y = up
-		} else if fit := containerH - h; fit >= 0 {
+	if limit > 0 && y+h > limit {
+		if fit := limit - h; fit >= headerRect.Y+headerRect.H {
 			y = fit
+		} else {
+			h = (limit - y) / SelectRowHeight * SelectRowHeight
+			if h < SelectRowHeight {
+				h = SelectRowHeight
+			}
 		}
 	}
 
@@ -425,7 +500,12 @@ func SelectListBounds(headerRect Rect, optionCount, containerH int) Rect {
 func SelectList(c *Canvas, in *Input, headerRect Rect, options []string, current int, scroll *int, containerH int, bg, hoverBg, textCol, borderCol Color, fontSize int) (newIdx int, selected bool) {
 	listRect := SelectListBounds(headerRect, len(options), containerH)
 
-	maxScroll := len(options) - SelectMaxVisibleRows
+	visibleRows := listRect.H / SelectRowHeight
+	if visibleRows < 1 {
+		visibleRows = 1
+	}
+
+	maxScroll := len(options) - visibleRows
 	if maxScroll < 0 {
 		maxScroll = 0
 	}
@@ -440,13 +520,14 @@ func SelectList(c *Canvas, in *Input, headerRect Rect, options []string, current
 		*scroll = maxScroll
 	}
 
+	shadowRect := Rect{X: listRect.X - 2, Y: listRect.Y - 2, W: listRect.W + 4, H: listRect.H + 4}
+	c.FillRoundedRect(shadowRect, RadiusSmall, Color{R: 0, G: 0, B: 0, A: 140})
 	c.FillRoundedRect(listRect, RadiusSmall, bg)
-	c.StrokeRoundedRect(listRect, RadiusSmall, borderCol, 1)
 
 	newIdx = current
 	visible := len(options) - *scroll
-	if visible > SelectMaxVisibleRows {
-		visible = SelectMaxVisibleRows
+	if visible > visibleRows {
+		visible = visibleRows
 	}
 
 	c.ClipRect(listRect)
@@ -460,8 +541,8 @@ func SelectList(c *Canvas, in *Input, headerRect Rect, options []string, current
 		if optIdx == current {
 			c.FillRect(Rect{X: rowRect.X, Y: rowRect.Y, W: 3, H: rowRect.H}, textCol)
 		}
-		label, _, th := fitText(c, options[optIdx], fontSize, rowRect.W-20)
-		c.Text(rowRect.X+10, rowRect.Y+(rowRect.H+th)/2-2, textCol, fontSize, label)
+		label, _, _ := fitText(c, options[optIdx], fontSize, rowRect.W-20)
+		c.TextVCentered(rowRect.X+10, rowRect, textCol, fontSize, label)
 		if hover && in.Released {
 			newIdx = optIdx
 			selected = true
@@ -471,13 +552,15 @@ func SelectList(c *Canvas, in *Input, headerRect Rect, options []string, current
 
 	if maxScroll > 0 {
 		trackH := listRect.H - 6
-		thumbH := trackH * SelectMaxVisibleRows / len(options)
+		thumbH := trackH * visibleRows / len(options)
 		if thumbH < 14 {
 			thumbH = 14
 		}
 		thumbY := listRect.Y + 3 + (trackH-thumbH)*(*scroll)/maxScroll
 		c.FillRoundedRect(Rect{X: listRect.X + listRect.W - 5, Y: thumbY, W: 3, H: thumbH}, 1, borderCol)
 	}
+
+	c.StrokeRoundedRect(listRect, RadiusSmall, borderCol, 2)
 
 	return newIdx, selected
 }
@@ -503,9 +586,9 @@ func Sparkline(c *Canvas, r Rect, values []float32, col Color) {
 
 	pts := make([]Point, len(values))
 	for i, v := range values {
-		x := r.X + i*r.W/(len(values)-1)
+		x := float64(r.X) + float64(i)*float64(r.W)/float64(len(values)-1)
 		norm := (v - min) / span
-		y := r.Y + r.H - int(norm*float32(r.H))
+		y := float64(r.Y+r.H) - float64(norm)*float64(r.H)
 		pts[i] = Point{X: x, Y: y}
 	}
 	c.Line(pts, col, 2)

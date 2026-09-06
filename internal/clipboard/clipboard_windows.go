@@ -1,12 +1,17 @@
 package clipboard
 
 import (
-	"errors"
 	"syscall"
 	"unsafe"
+
+	"github.com/seneaLL/WTRTO/internal/i18n"
 )
 
-var ErrUnavailable = errors.New("буфер обмена недоступен")
+type unavailableErr struct{}
+
+func (unavailableErr) Error() string { return i18n.T("error.clipboard_unavailable_win") }
+
+var ErrUnavailable error = unavailableErr{}
 
 var (
 	user32   = syscall.NewLazyDLL("user32.dll")

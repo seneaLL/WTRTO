@@ -1,12 +1,17 @@
 package dialog
 
 import (
-	"errors"
 	"os/exec"
 	"strings"
+
+	"github.com/seneaLL/WTRTO/internal/i18n"
 )
 
-var ErrUnavailable = errors.New("диалог выбора файла недоступен: не найден zenity или kdialog")
+type unavailableErr struct{}
+
+func (unavailableErr) Error() string { return i18n.T("error.dialog_unavailable_linux") }
+
+var ErrUnavailable error = unavailableErr{}
 
 func hasZenity() bool {
 	_, err := exec.LookPath("zenity")
