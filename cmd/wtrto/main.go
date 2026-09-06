@@ -642,13 +642,13 @@ func launcherFrame(c *native.Canvas, in *native.Input, w *native.Window) bool {
 	}
 	fpsRect := native.Rect{X: margin + hotkeyW + rowGap, Y: 0, W: fpsW, H: 34}
 
-	c.Text(margin, y+14, colorTextDim, 13, "Хоткей вкл/выкл оверлея")
+	c.Text(margin, y+14, colorTextDim, 13, i18n.T("hotkey.label"))
 	c.Text(fpsRect.X, y+14, colorTextDim, 13, i18n.T("settings.fps_limit"))
 	y += 14 + 10
 
 	hkLabel := hotkeyLabel
 	if capturingHotkey {
-		hkLabel = "Нажмите комбинацию клавиш…"
+		hkLabel = i18n.T("hotkey.capturing")
 	}
 	if native.Button(c, in, native.Rect{X: margin, Y: y, W: hotkeyW, H: 34}, hkLabel, colorPanel, colorPanelHover, colorText, 13) {
 		capturingHotkey = true
@@ -684,7 +684,7 @@ func launcherFrame(c *native.Canvas, in *native.Input, w *native.Window) bool {
 	aboveY := buildY
 
 	if avail, latestSHA := updateStatus(); avail {
-		updText := "Доступно обновление"
+		updText := i18n.T("update.available")
 		if latestSHA != "" {
 			updText += " (" + latestSHA + ")"
 		}
@@ -707,7 +707,7 @@ func launcherFrame(c *native.Canvas, in *native.Input, w *native.Window) bool {
 	}
 
 	if limAvail, limVer := limitsUpdateStatus(); limAvail {
-		limText := "Обновлены данные о лимитах самолётов"
+		limText := i18n.T("limits.updated")
 		if limVer != "" {
 			limText += " (" + limVer + ")"
 		}

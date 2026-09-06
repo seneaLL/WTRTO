@@ -9,6 +9,7 @@ import (
 	"github.com/seneaLL/WTRTO/internal/clipboard"
 	"github.com/seneaLL/WTRTO/internal/config"
 	"github.com/seneaLL/WTRTO/internal/dialog"
+	"github.com/seneaLL/WTRTO/internal/i18n"
 	"github.com/seneaLL/WTRTO/internal/native"
 )
 
@@ -68,7 +69,7 @@ func indexOf(opts []string, v string) int {
 
 func deconflictBuiltinName(t Template) Template {
 	if IsBuiltin(t.Name) {
-		t.Name = t.Name + " (копия)"
+		t.Name = t.Name + i18n.T("editor.copy_suffix")
 	}
 
 	return t
@@ -199,7 +200,7 @@ func DrawPropertiesPanel(c *native.Canvas, in *native.Input, screenW, screenH in
 		nv, buf, clicked, submitted, stepped, clipErr := native.NumberStepper(c, in, r, value, step, precision, btnBg, btnHover, textCol, fieldFocus, 13, editing, editBuf, &cursor, &selAll)
 
 		if clipErr != nil {
-			edit.StatusMsg, edit.StatusOK = "Буфер обмена недоступен (нет xclip/xsel)", false
+			edit.StatusMsg, edit.StatusOK = i18n.T("editor.clipboard_unavailable"), false
 		}
 
 		switch {
@@ -243,7 +244,7 @@ func DrawPropertiesPanel(c *native.Canvas, in *native.Input, screenW, screenH in
 		nv, submitted, clicked, clipErr := native.TextInput(c, in, r, value, focused, &cursor, &selAll, fieldBorder, fieldFocus, fieldBg, textCol, fontSize)
 
 		if clipErr != nil {
-			edit.StatusMsg, edit.StatusOK = "Буфер обмена недоступен (нет xclip/xsel)", false
+			edit.StatusMsg, edit.StatusOK = i18n.T("editor.clipboard_unavailable"), false
 		}
 
 		if clicked {
@@ -279,10 +280,10 @@ func DrawPropertiesPanel(c *native.Canvas, in *native.Input, screenW, screenH in
 
 		return hover && in.Released
 	}
-	if drawTab(tmplTabRect, "Шаблон", edit.PanelTab != "element") {
+	if drawTab(tmplTabRect, i18n.T("editor.tab_template"), edit.PanelTab != "element") {
 		edit.PanelTab = "template"
 	}
-	if drawTab(elemTabRect, "Элемент", edit.PanelTab == "element") {
+	if drawTab(elemTabRect, i18n.T("editor.tab_element"), edit.PanelTab == "element") {
 		edit.PanelTab = "element"
 	}
 	y += 44
@@ -324,13 +325,13 @@ func DrawPropertiesPanel(c *native.Canvas, in *native.Input, screenW, screenH in
 	}
 
 	if edit.PanelTab != "element" {
-		label("Активный шаблон")
+		label(i18n.T("editor.active_template"))
 		names, _ := List()
 		tidx := indexOf(names, tmpl.Name)
 		selectField("template", row(panelX, y), names, tidx, func(i int) {
 			loaded, err := Load(names[i])
 			if err != nil {
-				edit.StatusMsg, edit.StatusOK = "Не удалось загрузить шаблон", false
+				edit.StatusMsg, edit.StatusOK = i18n.T("editor.load_failed"), false
 
 				return
 			}
@@ -341,45 +342,45 @@ func DrawPropertiesPanel(c *native.Canvas, in *native.Input, screenW, screenH in
 			s := config.Load()
 			s.ActiveTemplate = loaded.Name
 			config.Save(s)
-			edit.StatusMsg, edit.StatusOK = "Загружен: "+loaded.Name, true
+			edit.StatusMsg, edit.StatusOK = i18n.T("editor.loaded_prefix")+loaded.Name, true
 		})
 		y += 34
 
 		bgRect := native.Rect{X: panelX + 16, Y: y, W: 20, H: 20}
-		if native.Checkbox(c, in, bgRect, !edit.HideBackground, fieldBorder, fieldFocus, textCol, 13, "Закрашивать фон") {
+		if native.Checkbox(c, in, bgRect, !edit.HideBackground, fieldBorder, fieldFocus, textCol, 13, i18n.T("editor.fill_background")) {
 			edit.HideBackground = !edit.HideBackground
 		}
 		y += 34 + panelGroupGap
 
 		if readOnly {
-			wrapped("Стандартный шаблон - только просмотр. Сохраните копию ниже, чтобы редактировать.", errCol, 11)
+			wrapped(i18n.T("editor.readonly_notice"), errCol, 11)
 			y += 6
 		}
 
-		label("Сохранить как")
+		label(i18n.T("editor.save_as"))
 		nameRect := native.Rect{X: panelX + 16, Y: y, W: PanelWidth - 32 - 44, H: 28}
 		nv, submitted := textField("newname", nameRect, edit.NewTemplateName, 13)
 		if nv != edit.NewTemplateName {
 			edit.NewTemplateName = nv
 		}
 		saveAsRect := native.Rect{X: nameRect.X + nameRect.W + 8, Y: y, W: 36, H: 28}
-		saveAsClicked := iconButton(saveAsRect, "save", "Сохранить как копию шаблона", btnBg, btnHover)
+		saveAsClicked := iconButton(saveAsRect, "save", i18n.T("editor.save_as_copy_tip"), btnBg, btnHover)
 		if submitted || saveAsClicked {
 			name := edit.NewTemplateName
 			if name == "" {
-				edit.StatusMsg, edit.StatusOK = "Введите имя шаблона", false
+				edit.StatusMsg, edit.StatusOK = i18n.T("editor.enter_template_name"), false
 			} else if IsBuiltin(name) {
-				edit.StatusMsg, edit.StatusOK = "Это имя зарезервировано под стандартный шаблон, выберите другое", false
+				edit.StatusMsg, edit.StatusOK = i18n.T("editor.name_reserved"), false
 			} else {
 				fork := Template{Name: name, Army: tmpl.Army, Elements: append([]Element(nil), tmpl.Elements...)}
 				if err := Save(fork); err != nil {
-					edit.StatusMsg, edit.StatusOK = "Ошибка сохранения: "+err.Error(), false
+					edit.StatusMsg, edit.StatusOK = i18n.T("editor.save_error_prefix")+err.Error(), false
 				} else {
 					*tmpl = fork
 					s := config.Load()
 					s.ActiveTemplate = fork.Name
 					config.Save(s)
-					edit.StatusMsg, edit.StatusOK = "Сохранено как: "+fork.Name, true
+					edit.StatusMsg, edit.StatusOK = i18n.T("editor.saved_as_prefix")+fork.Name, true
 					edit.NewTemplateName = ""
 					edit.FocusField = ""
 					edit.ShareCode = ""
@@ -398,8 +399,8 @@ func DrawPropertiesPanel(c *native.Canvas, in *native.Input, screenW, screenH in
 		tmplBtnX := func(i int) int { return panelX + 16 + i*(tmplBtnW+tmplBtnGap) }
 
 		newBlankRect := native.Rect{X: tmplBtnX(0), Y: y, W: tmplBtnW, H: tmplBtnH}
-		if iconButton(newBlankRect, "plus", "Новый пустой шаблон", btnBg, btnHover) {
-			blank := Template{Name: fmt.Sprintf("Новый шаблон %d", time.Now().Unix()%100000), Army: "air"}
+		if iconButton(newBlankRect, "plus", i18n.T("editor.new_blank_template_tip"), btnBg, btnHover) {
+			blank := Template{Name: fmt.Sprintf(i18n.T("editor.new_template_name_fmt"), time.Now().Unix()%100000), Army: "air"}
 			Save(blank)
 			*tmpl = blank
 			edit.Selected = ""
@@ -408,22 +409,22 @@ func DrawPropertiesPanel(c *native.Canvas, in *native.Input, screenW, screenH in
 			s := config.Load()
 			s.ActiveTemplate = blank.Name
 			config.Save(s)
-			edit.StatusMsg, edit.StatusOK = "Создан: "+blank.Name, true
+			edit.StatusMsg, edit.StatusOK = i18n.T("editor.created_prefix")+blank.Name, true
 		}
 		exportRect := native.Rect{X: tmplBtnX(1), Y: y, W: tmplBtnW, H: tmplBtnH}
-		if iconButton(exportRect, "export", "Экспорт шаблона в файл", btnBg, btnHover) {
+		if iconButton(exportRect, "export", i18n.T("editor.export_tip"), btnBg, btnHover) {
 			edit.PendingDialog = "export"
 		}
 		importRect := native.Rect{X: tmplBtnX(2), Y: y, W: tmplBtnW, H: tmplBtnH}
-		if iconButton(importRect, "import", "Импорт шаблона из файла", btnBg, btnHover) {
+		if iconButton(importRect, "import", i18n.T("editor.import_tip"), btnBg, btnHover) {
 			edit.PendingDialog = "import"
 		}
 		if !readOnly {
 			deleteTmplRect := native.Rect{X: tmplBtnX(3), Y: y, W: tmplBtnW, H: tmplBtnH}
-			if iconButton(deleteTmplRect, "trash", "Удалить шаблон", dangerBg, dangerHover) {
+			if iconButton(deleteTmplRect, "trash", i18n.T("editor.delete_template_tip"), dangerBg, dangerHover) {
 				deletedName := tmpl.Name
 				if err := Delete(deletedName); err != nil {
-					edit.StatusMsg, edit.StatusOK = "Ошибка удаления: "+err.Error(), false
+					edit.StatusMsg, edit.StatusOK = i18n.T("editor.delete_error_prefix")+err.Error(), false
 				} else {
 					fallback, ferr := Load(DefaultAirTemplate().Name)
 					if ferr != nil {
@@ -437,42 +438,42 @@ func DrawPropertiesPanel(c *native.Canvas, in *native.Input, screenW, screenH in
 					s := config.Load()
 					s.ActiveTemplate = fallback.Name
 					config.Save(s)
-					edit.StatusMsg, edit.StatusOK = "Удалён: "+deletedName, true
+					edit.StatusMsg, edit.StatusOK = i18n.T("editor.deleted_prefix")+deletedName, true
 				}
 			}
 		}
 		y += 50 + panelGroupGap
 
-		label("Код шаблона")
+		label(i18n.T("editor.template_code"))
 		codeRect := native.Rect{X: panelX + 16, Y: y, W: PanelWidth - 32 - 92, H: 28}
 		cv, _ := textField("sharecode", codeRect, edit.ShareCode, 11)
 		if cv != edit.ShareCode {
 			edit.ShareCode = cv
 		}
 		shareRect := native.Rect{X: codeRect.X + codeRect.W + 8, Y: y, W: 40, H: 28}
-		if iconButton(shareRect, "clipboard", "Скопировать код шаблона в буфер обмена", btnBg, btnHover) {
+		if iconButton(shareRect, "clipboard", i18n.T("editor.copy_code_tip"), btnBg, btnHover) {
 			code, err := EncodeShareCode(*tmpl)
 			if err != nil {
-				edit.StatusMsg, edit.StatusOK = "Ошибка генерации кода: "+err.Error(), false
+				edit.StatusMsg, edit.StatusOK = i18n.T("editor.generate_code_error_prefix")+err.Error(), false
 			} else {
 				edit.ShareCode = code
 				if cerr := clipboard.Copy(code); cerr != nil {
-					edit.StatusMsg, edit.StatusOK = "Код готов (скопируйте вручную из поля выше - буфер обмена недоступен)", true
+					edit.StatusMsg, edit.StatusOK = i18n.T("editor.code_ready_no_clipboard"), true
 				} else {
-					edit.StatusMsg, edit.StatusOK = "Код скопирован в буфер обмена", true
+					edit.StatusMsg, edit.StatusOK = i18n.T("editor.code_copied"), true
 				}
 			}
 		}
 		loadRect := native.Rect{X: shareRect.X + shareRect.W + 4, Y: y, W: 40, H: 28}
-		if iconButton(loadRect, "download", "Загрузить шаблон из кода выше", btnBg, btnHover) {
+		if iconButton(loadRect, "download", i18n.T("editor.load_from_code_tip"), btnBg, btnHover) {
 			if edit.ShareCode == "" {
-				edit.StatusMsg, edit.StatusOK = "Вставьте код в поле выше", false
+				edit.StatusMsg, edit.StatusOK = i18n.T("editor.paste_code_first"), false
 			} else if loaded, err := DecodeShareCode(edit.ShareCode); err != nil {
 				edit.StatusMsg, edit.StatusOK = err.Error(), false
 			} else {
 				loaded = deconflictBuiltinName(loaded)
 				if err := Save(loaded); err != nil {
-					edit.StatusMsg, edit.StatusOK = "Ошибка сохранения: "+err.Error(), false
+					edit.StatusMsg, edit.StatusOK = i18n.T("editor.save_error_prefix")+err.Error(), false
 				} else {
 					*tmpl = loaded
 					edit.Selected = ""
@@ -480,7 +481,7 @@ func DrawPropertiesPanel(c *native.Canvas, in *native.Input, screenW, screenH in
 					s := config.Load()
 					s.ActiveTemplate = loaded.Name
 					config.Save(s)
-					edit.StatusMsg, edit.StatusOK = "Загружено по коду: "+loaded.Name, true
+					edit.StatusMsg, edit.StatusOK = i18n.T("editor.loaded_from_code_prefix")+loaded.Name, true
 				}
 			}
 		}
@@ -499,7 +500,7 @@ func DrawPropertiesPanel(c *native.Canvas, in *native.Input, screenW, screenH in
 
 	if !readOnly {
 		addRect := row(panelX, y)
-		if native.Button(c, in, addRect, "+ Добавить элемент", btnBg, btnHover, textCol, 14) {
+		if native.Button(c, in, addRect, i18n.T("editor.add_element"), btnBg, btnHover, textCol, 14) {
 			e := newElement()
 			tmpl.Elements = append(tmpl.Elements, e)
 			edit.Selected = e.ID
@@ -513,9 +514,9 @@ func DrawPropertiesPanel(c *native.Canvas, in *native.Input, screenW, screenH in
 	}
 
 	if edit.Selected == "" {
-		msg := "Выберите элемент на экране для редактирования"
+		msg := i18n.T("editor.select_element_hint")
 		if readOnly {
-			msg = "Элементы недоступны для выбора в стандартном шаблоне"
+			msg = i18n.T("editor.readonly_no_elements")
 		}
 		wrapped(msg, labelCol, 12)
 
@@ -539,18 +540,18 @@ func DrawPropertiesPanel(c *native.Canvas, in *native.Input, screenW, screenH in
 	if !readOnly {
 		centerHRect := native.Rect{X: panelX + 16, Y: y, W: 40, H: 28}
 		centerVRect := native.Rect{X: centerHRect.X + centerHRect.W + 8, Y: y, W: 40, H: 28}
-		if iconButton(centerHRect, "align-h", "Выровнять по центру по горизонтали", btnBg, btnHover) {
+		if iconButton(centerHRect, "align-h", i18n.T("editor.align_h_tip"), btnBg, btnHover) {
 			e.X = 0.5
 			changed = true
 		}
-		if iconButton(centerVRect, "align-v", "Выровнять по центру по вертикали", btnBg, btnHover) {
+		if iconButton(centerVRect, "align-v", i18n.T("editor.align_v_tip"), btnBg, btnHover) {
 			e.Y = 0.5
 			changed = true
 		}
 		y += 34 + panelGroupGap
 	}
 
-	label("Тип")
+	label(i18n.T("editor.type"))
 	opts := kindOptions()
 	selectField("kind", row(panelX, y), opts, indexOf(opts, string(e.Kind)), func(i int) {
 		newKind := ElementKind(opts[i])
@@ -562,7 +563,7 @@ func DrawPropertiesPanel(c *native.Canvas, in *native.Input, screenW, screenH in
 	y += 36 + panelGroupGap
 
 	if e.Kind != KindHorizon {
-		label("Величина")
+		label(i18n.T("editor.value"))
 		bopts := bindingOptions()
 		selectField("binding", row(panelX, y), bopts, indexOf(bopts, string(e.Binding)), func(i int) {
 			newBind := Binding(bopts[i])
@@ -575,7 +576,7 @@ func DrawPropertiesPanel(c *native.Canvas, in *native.Input, screenW, screenH in
 
 		if supportsAutoColor(e.Binding) {
 			autoColorRect := row(panelX, y)
-			if native.Checkbox(c, in, native.Rect{X: autoColorRect.X, Y: autoColorRect.Y, W: 20, H: 20}, e.AutoColor, fieldBorder, fieldFocus, textCol, 13, "Авто-цвет по лимиту") {
+			if native.Checkbox(c, in, native.Rect{X: autoColorRect.X, Y: autoColorRect.Y, W: 20, H: 20}, e.AutoColor, fieldBorder, fieldFocus, textCol, 13, i18n.T("editor.auto_color")) {
 				e.AutoColor = !e.AutoColor
 				changed = true
 			}
@@ -585,7 +586,7 @@ func DrawPropertiesPanel(c *native.Canvas, in *native.Input, screenW, screenH in
 	}
 
 	if e.Kind == KindText {
-		labelR, unitR := pairRow("Подпись", "Единицы", 0.62)
+		labelR, unitR := pairRow(i18n.T("editor.label"), i18n.T("editor.units"), 0.62)
 		nv, submitted := textField("label", labelR, e.Label, 13)
 		if submitted {
 			edit.FocusField = ""
@@ -604,13 +605,13 @@ func DrawPropertiesPanel(c *native.Canvas, in *native.Input, screenW, screenH in
 		}
 		y += 36
 
-		precR, boldR := pairRow("Точность", "", 0.4)
+		precR, boldR := pairRow(i18n.T("editor.precision"), "", 0.4)
 		nv2 := numberField("el_precision", precR, float64(e.Precision), 1, 0)
 		if int(nv2) != e.Precision {
 			e.Precision = int(nv2)
 			changed = true
 		}
-		if native.Checkbox(c, in, native.Rect{X: boldR.X, Y: boldR.Y, W: 20, H: 20}, e.Bold, fieldBorder, fieldFocus, textCol, 13, "Жирный") {
+		if native.Checkbox(c, in, native.Rect{X: boldR.X, Y: boldR.Y, W: 20, H: 20}, e.Bold, fieldBorder, fieldFocus, textCol, 13, i18n.T("editor.bold")) {
 			e.Bold = !e.Bold
 			changed = true
 		}
@@ -619,7 +620,7 @@ func DrawPropertiesPanel(c *native.Canvas, in *native.Input, screenW, screenH in
 
 	if e.Kind != KindHorizon {
 		if e.Kind == KindTapeV || e.Kind == KindTapeH {
-			fsRect, thickRect := pairRow("Размер шрифта", "Толщина", 0.5)
+			fsRect, thickRect := pairRow(i18n.T("editor.font_size"), i18n.T("editor.thickness"), 0.5)
 			fontSize := e.FontSize
 			if fontSize == 0 {
 				fontSize = 15
@@ -643,7 +644,7 @@ func DrawPropertiesPanel(c *native.Canvas, in *native.Input, screenW, screenH in
 			}
 			y += 36
 		} else {
-			label("Размер шрифта")
+			label(i18n.T("editor.font_size"))
 			fontSize := e.FontSize
 			if fontSize == 0 {
 				fontSize = 15
@@ -659,7 +660,7 @@ func DrawPropertiesPanel(c *native.Canvas, in *native.Input, screenW, screenH in
 	}
 
 	if e.Kind == KindTapeV || e.Kind == KindTapeH {
-		styleRect, dirRect := pairRow("Стиль", "Направление", 0.5)
+		styleRect, dirRect := pairRow(i18n.T("editor.style"), i18n.T("editor.direction"), 0.5)
 		sopts := []string{string(StyleStraight), string(StyleArc)}
 		si := 0
 		if e.Style == StyleArc {
@@ -688,7 +689,7 @@ func DrawPropertiesPanel(c *native.Canvas, in *native.Input, screenW, screenH in
 		y += 36
 
 		if e.Kind == KindTapeV {
-			label("Сторона")
+			label(i18n.T("editor.side"))
 			lopts := []string{string(SideAuto), string(SideLeft), string(SideRight)}
 			selectField("labelside", row(panelX, y), lopts, indexOf(lopts, string(e.LabelSide)), func(i int) {
 				newSide := LabelSide(lopts[i])
@@ -700,7 +701,7 @@ func DrawPropertiesPanel(c *native.Canvas, in *native.Input, screenW, screenH in
 			y += 36
 		}
 
-		lenRect, rangeRect := pairRow("Длина", "Диапазон", 0.5)
+		lenRect, rangeRect := pairRow(i18n.T("editor.length"), i18n.T("editor.range"), 0.5)
 		nv := numberField("el_length", lenRect, e.Length, 0.01, 3)
 		if nv != e.Length {
 			e.Length = nv
@@ -713,7 +714,7 @@ func DrawPropertiesPanel(c *native.Canvas, in *native.Input, screenW, screenH in
 		}
 		y += 36
 
-		minorRect, majorRect := pairRow("Малый шаг", "Большой шаг", 0.5)
+		minorRect, majorRect := pairRow(i18n.T("editor.minor_step"), i18n.T("editor.major_step"), 0.5)
 		nv = numberField("el_minorstep", minorRect, e.MinorStep, 1, 0)
 		if nv != e.MinorStep {
 			e.MinorStep = nv
@@ -735,7 +736,7 @@ func DrawPropertiesPanel(c *native.Canvas, in *native.Input, screenW, screenH in
 		}
 		zonesTop := y
 
-		label("Зоны")
+		label(i18n.T("editor.zones"))
 		rowH := 36
 		thW := PanelWidth - 32 - rowH - rowH - 16
 		for zi := 0; zi < len(e.Zones); zi++ {
@@ -764,7 +765,7 @@ func DrawPropertiesPanel(c *native.Canvas, in *native.Input, screenW, screenH in
 				}
 			}
 
-			if iconButton(delRect, "trash", "Удалить зону", dangerBg, dangerHover) {
+			if iconButton(delRect, "trash", i18n.T("editor.delete_zone_tip"), dangerBg, dangerHover) {
 				e.Zones = append(e.Zones[:zi], e.Zones[zi+1:]...)
 				if edit.ColorPickerFor == e.ID && edit.ColorPickerZone == zi {
 					edit.ColorPickerFor = ""
@@ -787,7 +788,7 @@ func DrawPropertiesPanel(c *native.Canvas, in *native.Input, screenW, screenH in
 			}
 		}
 		addZoneRect := native.Rect{X: panelX + 16, Y: y, W: 40, H: 32}
-		if iconButton(addZoneRect, "plus", "Добавить зону", btnBg, btnHover) {
+		if iconButton(addZoneRect, "plus", i18n.T("editor.add_zone_tip"), btnBg, btnHover) {
 			e.Zones = append(e.Zones, Zone{Threshold: 0, Color: Color{R: 80, G: 255, B: 90, A: 255}})
 			changed = true
 		}
@@ -801,7 +802,7 @@ func DrawPropertiesPanel(c *native.Canvas, in *native.Input, screenW, screenH in
 	}
 
 	if !e.AutoColor && len(e.Zones) == 0 {
-		label("Цвет")
+		label(i18n.T("editor.color"))
 		colorPickerH := native.ColorPickerHeight(PanelWidth - 32)
 		newCol := native.ColorPicker(c, in, native.Rect{X: panelX + 16, Y: y, W: PanelWidth - 32, H: colorPickerH}, toNativeColor(e.Color))
 		if newCol != toNativeColor(e.Color) {
@@ -813,7 +814,7 @@ func DrawPropertiesPanel(c *native.Canvas, in *native.Input, screenW, screenH in
 	}
 
 	glowRect := row(panelX, y)
-	if native.Checkbox(c, in, native.Rect{X: glowRect.X, Y: glowRect.Y, W: 20, H: 20}, e.GlowEnabled, fieldBorder, fieldFocus, textCol, 13, "Свечение") {
+	if native.Checkbox(c, in, native.Rect{X: glowRect.X, Y: glowRect.Y, W: 20, H: 20}, e.GlowEnabled, fieldBorder, fieldFocus, textCol, 13, i18n.T("editor.glow")) {
 		e.GlowEnabled = !e.GlowEnabled
 		if e.GlowEnabled {
 			if e.GlowIntensity == 0 {
@@ -829,7 +830,7 @@ func DrawPropertiesPanel(c *native.Canvas, in *native.Input, screenW, screenH in
 
 	if e.GlowEnabled {
 		ownRect := row(panelX, y)
-		if native.Checkbox(c, in, native.Rect{X: ownRect.X, Y: ownRect.Y, W: 20, H: 20}, e.GlowUseOwn, fieldBorder, fieldFocus, textCol, 13, "Цвет элемента") {
+		if native.Checkbox(c, in, native.Rect{X: ownRect.X, Y: ownRect.Y, W: 20, H: 20}, e.GlowUseOwn, fieldBorder, fieldFocus, textCol, 13, i18n.T("editor.glow_use_own_color")) {
 			e.GlowUseOwn = !e.GlowUseOwn
 			if !e.GlowUseOwn && e.GlowColor.A == 0 {
 				e.GlowColor = Color{R: 255, G: 255, B: 255, A: 255}
@@ -839,7 +840,7 @@ func DrawPropertiesPanel(c *native.Canvas, in *native.Input, screenW, screenH in
 		y += 34
 
 		if !e.GlowUseOwn {
-			label("Цвет свечения")
+			label(i18n.T("editor.glow_color"))
 			glowPickerH := native.ColorPickerHeight(PanelWidth - 32)
 			newGlowCol := native.ColorPicker(c, in, native.Rect{X: panelX + 16, Y: y, W: PanelWidth - 32, H: glowPickerH}, toNativeColor(e.GlowColor))
 			if newGlowCol != toNativeColor(e.GlowColor) {
@@ -849,7 +850,7 @@ func DrawPropertiesPanel(c *native.Canvas, in *native.Input, screenW, screenH in
 			y += glowPickerH + 16
 		}
 
-		label("Интенсивность, %")
+		label(i18n.T("editor.glow_intensity"))
 		intensityPct := numberField("el_glow_intensity", row(panelX, y), e.GlowIntensity*100, 5, 0)
 		nv := intensityPct / 100
 		if nv < 0 {
@@ -866,7 +867,7 @@ func DrawPropertiesPanel(c *native.Canvas, in *native.Input, screenW, screenH in
 	}
 
 	delRect := native.Rect{X: panelX + 16, Y: screenH - 60, W: PanelWidth - 32, H: 36}
-	if native.Button(c, in, delRect, "Удалить", dangerBg, dangerHover, textCol, 14) {
+	if native.Button(c, in, delRect, i18n.T("editor.delete"), dangerBg, dangerHover, textCol, 14) {
 		tmpl.Elements = append(tmpl.Elements[:idx], tmpl.Elements[idx+1:]...)
 		edit.Selected = ""
 		edit.FocusField = ""
@@ -900,35 +901,35 @@ func ResolvePendingDialog(tmpl *Template, edit *EditState) {
 
 	switch action {
 	case "export":
-		path, err := dialog.SaveFile("Экспорт шаблона", slug(tmpl.Name)+".json")
+		path, err := dialog.SaveFile(i18n.T("editor.export_dialog_title"), slug(tmpl.Name)+".json")
 
 		switch {
 		case err != nil:
-			edit.StatusMsg, edit.StatusOK = "Диалог сохранения недоступен: "+err.Error(), false
+			edit.StatusMsg, edit.StatusOK = i18n.T("editor.save_dialog_unavailable_prefix")+err.Error(), false
 
 		case path == "":
 
 		default:
 			if exportErr := Export(*tmpl, path); exportErr != nil {
-				edit.StatusMsg, edit.StatusOK = "Ошибка экспорта: "+exportErr.Error(), false
+				edit.StatusMsg, edit.StatusOK = i18n.T("editor.export_error_prefix")+exportErr.Error(), false
 			} else {
-				edit.StatusMsg, edit.StatusOK = "Экспортировано в "+path, true
+				edit.StatusMsg, edit.StatusOK = i18n.T("editor.exported_to_prefix")+path, true
 			}
 		}
 
 	case "import":
-		path, err := dialog.OpenFile("Импорт шаблона")
+		path, err := dialog.OpenFile(i18n.T("editor.import_dialog_title"))
 
 		switch {
 		case err != nil:
-			edit.StatusMsg, edit.StatusOK = "Диалог выбора файла недоступен: "+err.Error(), false
+			edit.StatusMsg, edit.StatusOK = i18n.T("editor.open_dialog_unavailable_prefix")+err.Error(), false
 
 		case path == "":
 
 		default:
 			loaded, lerr := Import(path)
 			if lerr != nil {
-				edit.StatusMsg, edit.StatusOK = "Ошибка импорта: "+lerr.Error(), false
+				edit.StatusMsg, edit.StatusOK = i18n.T("editor.import_error_prefix")+lerr.Error(), false
 				break
 			}
 
@@ -940,7 +941,7 @@ func ResolvePendingDialog(tmpl *Template, edit *EditState) {
 			s := config.Load()
 			s.ActiveTemplate = loaded.Name
 			config.Save(s)
-			edit.StatusMsg, edit.StatusOK = "Импортировано: "+loaded.Name, true
+			edit.StatusMsg, edit.StatusOK = i18n.T("editor.imported_prefix")+loaded.Name, true
 		}
 	}
 }

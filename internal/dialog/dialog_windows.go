@@ -1,13 +1,18 @@
 package dialog
 
 import (
-	"errors"
 	"strings"
 	"syscall"
 	"unsafe"
+
+	"github.com/seneaLL/WTRTO/internal/i18n"
 )
 
-var ErrUnavailable = errors.New("диалог выбора файла недоступен")
+type unavailableErr struct{}
+
+func (unavailableErr) Error() string { return i18n.T("error.dialog_unavailable") }
+
+var ErrUnavailable error = unavailableErr{}
 
 var (
 	comdlg32 = syscall.NewLazyDLL("comdlg32.dll")
