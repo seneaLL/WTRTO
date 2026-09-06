@@ -523,7 +523,6 @@ func SelectList(c *Canvas, in *Input, headerRect Rect, options []string, current
 	shadowRect := Rect{X: listRect.X - 2, Y: listRect.Y - 2, W: listRect.W + 4, H: listRect.H + 4}
 	c.FillRoundedRect(shadowRect, RadiusSmall, Color{R: 0, G: 0, B: 0, A: 140})
 	c.FillRoundedRect(listRect, RadiusSmall, bg)
-	c.StrokeRoundedRect(listRect, RadiusSmall, borderCol, 2)
 
 	newIdx = current
 	visible := len(options) - *scroll
@@ -560,6 +559,8 @@ func SelectList(c *Canvas, in *Input, headerRect Rect, options []string, current
 		thumbY := listRect.Y + 3 + (trackH-thumbH)*(*scroll)/maxScroll
 		c.FillRoundedRect(Rect{X: listRect.X + listRect.W - 5, Y: thumbY, W: 3, H: thumbH}, 1, borderCol)
 	}
+
+	c.StrokeRoundedRect(listRect, RadiusSmall, borderCol, 2)
 
 	return newIdx, selected
 }

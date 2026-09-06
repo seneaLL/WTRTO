@@ -178,6 +178,8 @@ func DrawPropertiesPanel(c *native.Canvas, in *native.Input, screenW, screenH in
 			listBounds := native.SelectListBounds(r, len(options), screenH)
 			if listBounds.Contains(in.MouseX, in.MouseY) {
 				masked := *in
+				masked.MouseX = -1
+				masked.MouseY = -1
 				masked.MouseDown = false
 				masked.Pressed = false
 				masked.Released = false
@@ -731,6 +733,7 @@ func DrawPropertiesPanel(c *native.Canvas, in *native.Input, screenW, screenH in
 		zonesRealIn := in
 		if zonesLocked {
 			masked := *in
+			masked.MouseX, masked.MouseY = -1, -1
 			masked.MouseDown, masked.Pressed, masked.Released, masked.ScrollDelta = false, false, false, 0
 			in = &masked
 		}

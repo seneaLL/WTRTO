@@ -267,7 +267,13 @@ func runOverlay(launcherPID int) {
 	sw, sh := w.Size()
 	hudActive := false
 	renderActive := false
-	debugFrame := overlay.NewHUD(sw, sh, sampler, func() bool { return debugOn }, func() bool { return !hideFPS }, func() bool { return renderActive })
+	debugFrame := overlay.NewHUD(sw, sh, sampler, func() bool { return debugOn }, func() bool { return !hideFPS }, func() bool { return renderActive }, func() int {
+		if editMode {
+			return hud.PanelWidth + 20
+		}
+
+		return 0
+	})
 
 	exitEditMode := func() {
 		editMode = false
@@ -665,6 +671,7 @@ func launcherFrame(c *native.Canvas, in *native.Input, w *native.Window) bool {
 		listBounds := native.SelectListBounds(fpsRect, len(fpsOptions), curH)
 		if listBounds.Contains(in.MouseX, in.MouseY) {
 			masked := *in
+			masked.MouseX, masked.MouseY = -1, -1
 			masked.MouseDown, masked.Pressed, masked.Released, masked.ScrollDelta = false, false, false, 0
 			in = &masked
 		}

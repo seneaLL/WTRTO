@@ -69,3 +69,56 @@ func SampleGPU() GPUSample {
 
 	return GPUSample{Available: true, UtilPercent: util, MemUsedMB: used, MemTotalMB: total}
 }
+
+func SampleProcessGPUUtil(pids []int32) map[int32]float64 {
+	result := make(map[int32]float64)
+	if nvidiaSMIPath == "" || len(pids) == 0 {
+		return result
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, nvidiaSMIPath, "pmon", "-c", "1", "-s", "u")
+	hideWindow(cmd)
+
+	out, err := cmd.Output()
+	if err != nil {
+		return result
+	}
+
+	want := make(map[int32]bool, len(pids))
+	for _, p := range pids {
+		want[p] = true
+	}
+
+	for _, line := range strings.Split(string(out), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+
+		fields := strings.Fields(line)
+		if len(fields) < 4 {
+			continue
+		}
+
+		pid64, err := strconv.ParseInt(fields[1], 10, 32)
+		if err != nil {
+			continue
+		}
+
+		pid := int32(pid64)
+		if !want[pid] {
+			continue
+		}
+
+		sm := 0.0
+		if fields[3] != "-" {
+			sm, _ = strconv.ParseFloat(fields[3], 64)
+		}
+		result[pid] += sm
+	}
+
+	return result
+}

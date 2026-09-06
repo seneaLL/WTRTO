@@ -1,6 +1,6 @@
 MODULE := github.com/seneaLL/WTRTO
 VERSION := $(shell git rev-parse HEAD 2>/dev/null || echo dev)
-BUILD_DATE := $(shell date -u +%Y-%m-%d)
+BUILD_DATE := $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
 BUILD_HASH := $(shell find . -name '*.go' -not -path './bin/*' | LC_ALL=C sort | xargs cat | sha256sum | cut -c1-12)
 LDFLAGS := -X $(MODULE)/internal/version.Version=$(VERSION) -X $(MODULE)/internal/version.BuildDate=$(BUILD_DATE) -X $(MODULE)/internal/version.BuildHash=$(BUILD_HASH)
 
