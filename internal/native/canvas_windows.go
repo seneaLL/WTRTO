@@ -227,6 +227,86 @@ func (c *Canvas) FillRoundedRect(r Rect, radius int, col Color) {
 	procGdipFillPath.Call(c.win.graphics, brush, path)
 }
 
+func roundedRectPathMask(r Rect, radius int, tl, tr, br, bl bool) uintptr {
+	if maxR := r.W / 2; radius > maxR {
+		radius = maxR
+	}
+	if maxR := r.H / 2; radius > maxR {
+		radius = maxR
+	}
+	d := radius * 2
+	x, y, w, h := r.X, r.Y, r.W, r.H
+
+	var path uintptr
+	procGdipCreatePath.Call(fillModeAlternate, uintptr(unsafe.Pointer(&path)))
+
+	line := func(x1, y1, x2, y2 int) {
+		pts := []gpPointF{{X: float32(x1), Y: float32(y1)}, {X: float32(x2), Y: float32(y2)}}
+		procGdipAddPathLine2.Call(path, uintptr(unsafe.Pointer(&pts[0])), 2)
+	}
+
+	topStartX, topEndX := x, x+w
+	if tl {
+		topStartX = x + radius
+	}
+	if tr {
+		topEndX = x + w - radius
+	}
+	line(topStartX, y, topEndX, y)
+	if tr {
+		procGdipAddPathArcI.Call(path, uintptr(x+w-d), uintptr(y), uintptr(d), uintptr(d), floatBits(-90), floatBits(90))
+	}
+
+	rightStartY, rightEndY := y, y+h
+	if tr {
+		rightStartY = y + radius
+	}
+	if br {
+		rightEndY = y + h - radius
+	}
+	line(x+w, rightStartY, x+w, rightEndY)
+	if br {
+		procGdipAddPathArcI.Call(path, uintptr(x+w-d), uintptr(y+h-d), uintptr(d), uintptr(d), floatBits(0), floatBits(90))
+	}
+
+	bottomStartX, bottomEndX := x+w, x
+	if br {
+		bottomStartX = x + w - radius
+	}
+	if bl {
+		bottomEndX = x + radius
+	}
+	line(bottomStartX, y+h, bottomEndX, y+h)
+	if bl {
+		procGdipAddPathArcI.Call(path, uintptr(x), uintptr(y+h-d), uintptr(d), uintptr(d), floatBits(90), floatBits(90))
+	}
+
+	leftStartY, leftEndY := y+h, y
+	if bl {
+		leftStartY = y + h - radius
+	}
+	if tl {
+		leftEndY = y + radius
+	}
+	line(x, leftStartY, x, leftEndY)
+	if tl {
+		procGdipAddPathArcI.Call(path, uintptr(x), uintptr(y), uintptr(d), uintptr(d), floatBits(180), floatBits(90))
+	}
+
+	procGdipClosePathFigure.Call(path)
+
+	return path
+}
+
+func (c *Canvas) FillRoundedRectCorners(r Rect, radius int, tl, tr, br, bl bool, col Color) {
+	path := roundedRectPathMask(r, radius, tl, tr, br, bl)
+	defer procGdipDeletePath.Call(path)
+
+	brush := c.brushFor(col)
+
+	procGdipFillPath.Call(c.win.graphics, brush, path)
+}
+
 func (c *Canvas) StrokeRoundedRect(r Rect, radius int, col Color, width int) {
 	half := width / 2
 	inset := Rect{X: r.X + half, Y: r.Y + half, W: r.W - 2*half, H: r.H - 2*half}

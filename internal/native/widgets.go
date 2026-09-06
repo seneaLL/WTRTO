@@ -132,12 +132,16 @@ func IconButton(c *Canvas, in *Input, r Rect, icon string, bg, bgHover, textCol 
 }
 
 func iconButtonInset(c *Canvas, in *Input, r Rect, icon string, bg, bgHover, textCol Color, fontSize int, insetFrac float64) (clicked, hover bool) {
+	return iconButtonCorners(c, in, r, icon, bg, bgHover, textCol, fontSize, insetFrac, true, true, true, true)
+}
+
+func iconButtonCorners(c *Canvas, in *Input, r Rect, icon string, bg, bgHover, textCol Color, fontSize int, insetFrac float64, tl, tr, br, bl bool) (clicked, hover bool) {
 	hover = r.Contains(in.MouseX, in.MouseY)
 	col := bg
 	if hover {
 		col = bgHover
 	}
-	c.FillRoundedRect(r, RadiusSmall, col)
+	c.FillRoundedRectCorners(r, RadiusSmall, tl, tr, br, bl, col)
 
 	switch {
 	case svgIcons[icon] != nil:
@@ -296,21 +300,20 @@ func drawSelectionHighlight(c *Canvas, r Rect, textW int) {
 }
 
 func NumberStepper(c *Canvas, in *Input, r Rect, value, step float64, precision int, bg, bgHover, textCol, focusCol Color, fontSize int, editing bool, editBuf string, cursor *int, selectedAll *bool) (newValue float64, buf string, clicked bool, submitted bool, stepped bool, clipErr error) {
-	const stepGap = 5
 	btnW := r.H
 	minusRect := Rect{X: r.X, Y: r.Y, W: btnW, H: r.H}
 	plusRect := Rect{X: r.X + r.W - btnW, Y: r.Y, W: btnW, H: r.H}
-	midRect := Rect{X: r.X + btnW + stepGap, Y: r.Y, W: r.W - 2*btnW - 2*stepGap, H: r.H}
+	midRect := Rect{X: r.X + btnW, Y: r.Y, W: r.W - 2*btnW, H: r.H}
 
 	newValue = value
 	mult := StepMultiplier(in)
 
-	if clicked, _ := iconButtonInset(c, in, minusRect, "minus", bg, bgHover, textCol, fontSize, 0.3); clicked {
+	if clicked, _ := iconButtonCorners(c, in, minusRect, "minus", bg, bgHover, textCol, fontSize, 0.3, true, false, false, true); clicked {
 		newValue -= step * mult
 		stepped = true
 	}
 
-	if clicked, _ := iconButtonInset(c, in, plusRect, "plus", bg, bgHover, textCol, fontSize, 0.3); clicked {
+	if clicked, _ := iconButtonCorners(c, in, plusRect, "plus", bg, bgHover, textCol, fontSize, 0.3, false, true, true, false); clicked {
 		newValue += step * mult
 		stepped = true
 	}
@@ -479,15 +482,12 @@ func SelectListBounds(headerRect Rect, optionCount, containerH int) Rect {
 
 	limit := containerH - selectListBottomMargin
 
-	// Always open downward, never over content drawn earlier in the frame
-	// (above the header) - that content's click handling has already run
-	// with unmasked input by the time this list is drawn on top of it.
 	y := headerRect.Y + headerRect.H
 	if limit > 0 && y+h > limit {
 		if fit := limit - h; fit >= headerRect.Y+headerRect.H {
 			y = fit
 		} else {
-			h = limit - y
+			h = (limit - y) / SelectRowHeight * SelectRowHeight
 			if h < SelectRowHeight {
 				h = SelectRowHeight
 			}
@@ -500,7 +500,12 @@ func SelectListBounds(headerRect Rect, optionCount, containerH int) Rect {
 func SelectList(c *Canvas, in *Input, headerRect Rect, options []string, current int, scroll *int, containerH int, bg, hoverBg, textCol, borderCol Color, fontSize int) (newIdx int, selected bool) {
 	listRect := SelectListBounds(headerRect, len(options), containerH)
 
-	maxScroll := len(options) - SelectMaxVisibleRows
+	visibleRows := listRect.H / SelectRowHeight
+	if visibleRows < 1 {
+		visibleRows = 1
+	}
+
+	maxScroll := len(options) - visibleRows
 	if maxScroll < 0 {
 		maxScroll = 0
 	}
@@ -522,8 +527,8 @@ func SelectList(c *Canvas, in *Input, headerRect Rect, options []string, current
 
 	newIdx = current
 	visible := len(options) - *scroll
-	if visible > SelectMaxVisibleRows {
-		visible = SelectMaxVisibleRows
+	if visible > visibleRows {
+		visible = visibleRows
 	}
 
 	c.ClipRect(listRect)
@@ -548,7 +553,7 @@ func SelectList(c *Canvas, in *Input, headerRect Rect, options []string, current
 
 	if maxScroll > 0 {
 		trackH := listRect.H - 6
-		thumbH := trackH * SelectMaxVisibleRows / len(options)
+		thumbH := trackH * visibleRows / len(options)
 		if thumbH < 14 {
 			thumbH = 14
 		}

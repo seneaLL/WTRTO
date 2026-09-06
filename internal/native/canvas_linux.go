@@ -68,6 +68,10 @@ func (c *Canvas) StrokeRect(r Rect, col Color, width int) {
 }
 
 func roundedPath(cr *C.cairo_t, r Rect, radius int) {
+	roundedPathMask(cr, r, radius, true, true, true, true)
+}
+
+func roundedPathMask(cr *C.cairo_t, r Rect, radius int, tl, tr, br, bl bool) {
 	rad := float64(radius)
 	if max := float64(r.W); rad > max/2 {
 		rad = max / 2
@@ -79,10 +83,35 @@ func roundedPath(cr *C.cairo_t, r Rect, radius int) {
 	deg := C.double(3.14159265358979 / 180.0)
 
 	C.cairo_new_sub_path(cr)
-	C.cairo_arc(cr, C.double(x+w-rad), C.double(y+rad), C.double(rad), -90*deg, 0*deg)
-	C.cairo_arc(cr, C.double(x+w-rad), C.double(y+h-rad), C.double(rad), 0*deg, 90*deg)
-	C.cairo_arc(cr, C.double(x+rad), C.double(y+h-rad), C.double(rad), 90*deg, 180*deg)
-	C.cairo_arc(cr, C.double(x+rad), C.double(y+rad), C.double(rad), 180*deg, 270*deg)
+	if tl {
+		C.cairo_move_to(cr, C.double(x+rad), C.double(y))
+	} else {
+		C.cairo_move_to(cr, C.double(x), C.double(y))
+	}
+	if tr {
+		C.cairo_line_to(cr, C.double(x+w-rad), C.double(y))
+		C.cairo_arc(cr, C.double(x+w-rad), C.double(y+rad), C.double(rad), -90*deg, 0*deg)
+	} else {
+		C.cairo_line_to(cr, C.double(x+w), C.double(y))
+	}
+	if br {
+		C.cairo_line_to(cr, C.double(x+w), C.double(y+h-rad))
+		C.cairo_arc(cr, C.double(x+w-rad), C.double(y+h-rad), C.double(rad), 0*deg, 90*deg)
+	} else {
+		C.cairo_line_to(cr, C.double(x+w), C.double(y+h))
+	}
+	if bl {
+		C.cairo_line_to(cr, C.double(x+rad), C.double(y+h))
+		C.cairo_arc(cr, C.double(x+rad), C.double(y+h-rad), C.double(rad), 90*deg, 180*deg)
+	} else {
+		C.cairo_line_to(cr, C.double(x), C.double(y+h))
+	}
+	if tl {
+		C.cairo_line_to(cr, C.double(x), C.double(y+rad))
+		C.cairo_arc(cr, C.double(x+rad), C.double(y+rad), C.double(rad), 180*deg, 270*deg)
+	} else {
+		C.cairo_line_to(cr, C.double(x), C.double(y))
+	}
 	C.cairo_close_path(cr)
 }
 
@@ -90,6 +119,13 @@ func (c *Canvas) FillRoundedRect(r Rect, radius int, col Color) {
 	cr := c.win.cairoCtx
 	setSource(cr, col)
 	roundedPath(cr, r, radius)
+	C.cairo_fill(cr)
+}
+
+func (c *Canvas) FillRoundedRectCorners(r Rect, radius int, tl, tr, br, bl bool, col Color) {
+	cr := c.win.cairoCtx
+	setSource(cr, col)
+	roundedPathMask(cr, r, radius, tl, tr, br, bl)
 	C.cairo_fill(cr)
 }
 
