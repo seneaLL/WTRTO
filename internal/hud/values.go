@@ -36,6 +36,7 @@ type Values struct {
 	Rudder    float64
 	Flaps     float64
 	GearPct   float64
+	Airbrake  float64
 	RollRate  float64
 	Trimmer   float64
 	RadioAlt  float64
@@ -112,6 +113,7 @@ func (t *Tracker) Update(ind *telemetry.Indicators, st telemetry.State) Values {
 	v.Rudder, _ = st.RudderPct()
 	v.Flaps, _ = st.FlapsPct()
 	v.GearPct, _ = st.GearPct()
+	v.Airbrake, _ = st.AirbrakePct()
 	v.RollRate, _ = st.RollRateDegS()
 	v.Trimmer = ind.Trimmer * 100
 	v.RadioAlt = ind.RadioAltitude
@@ -163,8 +165,16 @@ func (t *Tracker) Update(ind *telemetry.Indicators, st telemetry.State) Values {
 		v.EngineThrottle[i], _ = st.EngineThrottlePct(n)
 		v.EngineRPM[i], _ = st.EngineRPM(n)
 		v.EngineManifold[i], _ = st.EngineManifoldPressureAtm(n)
-		v.EngineOilTemp[i], _ = st.EngineOilTempC(n)
-		v.EngineWaterTemp[i], _ = st.EngineWaterTempC(n)
+		if wt, ok := st.EngineOilTempC(n); ok {
+			v.EngineOilTemp[i] = wt
+		} else if wt, ok := ind.EngineOilTempC(n); ok {
+			v.EngineOilTemp[i] = wt
+		}
+		if wt, ok := st.EngineWaterTempC(n); ok {
+			v.EngineWaterTemp[i] = wt
+		} else if wt, ok := ind.EngineWaterTempC(n); ok {
+			v.EngineWaterTemp[i] = wt
+		}
 		v.EnginePower[i], _ = st.EnginePowerHp(n)
 		v.EngineThrust[i], _ = st.EngineThrustKgs(n)
 		v.EngineEfficiency[i], _ = st.EngineEfficiencyPct(n)

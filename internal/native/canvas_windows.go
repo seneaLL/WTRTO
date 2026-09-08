@@ -565,7 +565,7 @@ func (c *Canvas) TextSizeBold(s string, size int) (int, int) {
 	return c.textSize(s, size, true)
 }
 
-func (c *Canvas) DrawArtificialHorizon(cx, cy, radius int, pitchDeg, rollDeg float64, sky, ground, line, border Color) {
+func (c *Canvas) DrawArtificialHorizon(cx, cy, radius int, pitchDeg, rollDeg float64, sky, ground, line, border Color, lineWidth int) {
 	g := c.win.graphics
 
 	ellipse := Rect{X: cx - radius, Y: cy - radius, W: radius * 2, H: radius * 2}
@@ -587,17 +587,17 @@ func (c *Canvas) DrawArtificialHorizon(cx, cy, radius int, pitchDeg, rollDeg flo
 	procGdipFillRectangle.Call(g, skyBrush, floatBits(float32(-big)), floatBits(float32(-big+pitchOffset)), floatBits(float32(2*big)), floatBits(float32(big)))
 	procGdipFillRectangle.Call(g, groundBrush, floatBits(float32(-big)), floatBits(float32(pitchOffset)), floatBits(float32(2*big)), floatBits(float32(big)))
 
-	linePen := c.penFor(line, 2)
+	linePen := c.penFor(line, float32(lineWidth))
 	horizonPts := []gpPointF{{X: float32(-big), Y: float32(pitchOffset)}, {X: float32(big), Y: float32(pitchOffset)}}
 	procGdipDrawLines.Call(g, linePen, uintptr(unsafe.Pointer(&horizonPts[0])), 2)
 
 	procGdipResetWorldTransform.Call(g)
 	procGdipResetClip.Call(g)
 
-	borderPen := c.penFor(border, 2)
+	borderPen := c.penFor(border, float32(lineWidth))
 	procGdipDrawRectangleI.Call(g, borderPen, uintptr(cx-radius), uintptr(cy-radius), uintptr(radius*2), uintptr(radius*2))
 
-	tickPen := c.penFor(line, 2)
+	tickPen := c.penFor(line, float32(lineWidth))
 	left := []gpPointI{{X: int32(cx - 14), Y: int32(cy)}, {X: int32(cx - 4), Y: int32(cy)}}
 	right := []gpPointI{{X: int32(cx + 4), Y: int32(cy)}, {X: int32(cx + 14), Y: int32(cy)}}
 	procGdipDrawLinesI.Call(g, tickPen, uintptr(unsafe.Pointer(&left[0])), 2)

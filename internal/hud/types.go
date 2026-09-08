@@ -34,6 +34,8 @@ const (
 	BindTurn     Binding = "turn"
 
 	BindWingSweep Binding = "wing_sweep_pct"
+
+	BindAirbrake Binding = "airbrake_pct"
 )
 
 const MaxEngines = 8
@@ -90,6 +92,8 @@ func buildAllBindings() []Binding {
 			list = append(list, engineBinding(m, n))
 		}
 	}
+
+	list = append(list, BindAirbrake)
 
 	return list
 }
@@ -167,7 +171,10 @@ type Element struct {
 	Color     Color       `json:"color"`
 	Size      float64     `json:"size,omitempty"`
 	Bold      bool        `json:"bold,omitempty"`
+	Glow      bool        `json:"glow,omitempty"`
 	AutoColor bool        `json:"auto_color,omitempty"`
+	BgEnabled bool        `json:"bg_enabled,omitempty"`
+	BgColor   Color       `json:"bg_color,omitempty"`
 
 	Length    float64 `json:"length,omitempty"`
 	Range     float64 `json:"range,omitempty"`
@@ -181,15 +188,11 @@ type Element struct {
 	Zones     []Zone    `json:"zones,omitempty"`
 
 	Thickness int `json:"thickness,omitempty"`
-
-	GlowEnabled   bool    `json:"glow_enabled,omitempty"`
-	GlowUseOwn    bool    `json:"glow_use_own_color,omitempty"`
-	GlowColor     Color   `json:"glow_color,omitempty"`
-	GlowIntensity float64 `json:"glow_intensity,omitempty"`
 }
 
 type Template struct {
 	Name     string    `json:"name"`
 	Army     string    `json:"army"`
+	Aircraft string    `json:"aircraft,omitempty"`
 	Elements []Element `json:"elements"`
 }

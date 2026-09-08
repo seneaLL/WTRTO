@@ -514,6 +514,24 @@ func SelectDisplayRows(optionCount int, groups []string) int {
 	return rows
 }
 
+func SelectRowForOption(optIdx int, groups []string) int {
+	if groups == nil || optIdx < 0 {
+		return optIdx
+	}
+	row := 0
+	last := ""
+	for i := 0; i <= optIdx && i < len(groups); i++ {
+		g := groups[i]
+		if g != "" && (i == 0 || g != last) {
+			row++
+		}
+		row++
+		last = g
+	}
+
+	return row - 1
+}
+
 type selectDisplayRow struct {
 	optIdx int
 	header string

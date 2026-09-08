@@ -74,6 +74,41 @@ type Indicators struct {
 func (i Indicators) IsAircraft() bool { return i.Army == "air" }
 func (i Indicators) IsTank() bool     { return i.Army == "tank" }
 
+func (i Indicators) floatExtra(key string) (float64, bool) {
+	v, ok := i.Extra[key]
+	if !ok {
+		return 0, false
+	}
+	f, ok := v.(float64)
+	if !ok || f <= -273 {
+		return 0, false
+	}
+
+	return f, true
+}
+
+func (i Indicators) EngineWaterTempC(n int) (float64, bool) {
+	if f, ok := i.floatExtra(fmt.Sprintf("water_temperature%d", n)); ok {
+		return f, true
+	}
+	if n == 1 {
+		return i.floatExtra("water_temperature")
+	}
+
+	return 0, false
+}
+
+func (i Indicators) EngineOilTempC(n int) (float64, bool) {
+	if f, ok := i.floatExtra(fmt.Sprintf("oil_temperature%d", n)); ok {
+		return f, true
+	}
+	if n == 1 {
+		return i.floatExtra("oil_temperature")
+	}
+
+	return 0, false
+}
+
 func (i *Indicators) UnmarshalJSON(data []byte) error {
 	type alias Indicators
 	var a alias
@@ -122,6 +157,7 @@ func (s State) ElevatorPct() (float64, bool)          { return s.float("elevator
 func (s State) RudderPct() (float64, bool)            { return s.float("rudder, %") }
 func (s State) FlapsPct() (float64, bool)             { return s.float("flaps, %") }
 func (s State) GearPct() (float64, bool)              { return s.float("gear, %") }
+func (s State) AirbrakePct() (float64, bool)          { return s.float("airbrake, %") }
 
 func (s State) EngineThrottlePct(n int) (float64, bool) {
 	return s.float(fmt.Sprintf("throttle %d, %%", n))
