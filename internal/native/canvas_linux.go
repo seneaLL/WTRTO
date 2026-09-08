@@ -264,7 +264,7 @@ func (c *Canvas) TextSizeBold(s string, size int) (int, int) {
 	return c.textSize(s, size, true)
 }
 
-func (c *Canvas) DrawArtificialHorizon(cx, cy, radius int, pitchDeg, rollDeg float64, sky, ground, line, border Color) {
+func (c *Canvas) DrawArtificialHorizon(cx, cy, radius int, pitchDeg, rollDeg float64, sky, ground, line, border Color, lineWidth int) {
 	cr := c.win.cairoCtx
 	tau := 2 * 3.14159265358979
 
@@ -287,7 +287,7 @@ func (c *Canvas) DrawArtificialHorizon(cx, cy, radius int, pitchDeg, rollDeg flo
 	C.cairo_fill(cr)
 
 	setSource(cr, line)
-	C.cairo_set_line_width(cr, 2)
+	C.cairo_set_line_width(cr, C.double(lineWidth))
 	C.cairo_move_to(cr, C.double(-big), C.double(pitchOffset))
 	C.cairo_line_to(cr, C.double(big), C.double(pitchOffset))
 	C.cairo_stroke(cr)
@@ -295,12 +295,12 @@ func (c *Canvas) DrawArtificialHorizon(cx, cy, radius int, pitchDeg, rollDeg flo
 	C.cairo_restore(cr)
 
 	setSource(cr, border)
-	C.cairo_set_line_width(cr, 2)
+	C.cairo_set_line_width(cr, C.double(lineWidth))
 	C.cairo_arc(cr, C.double(cx), C.double(cy), C.double(radius), 0, C.double(tau))
 	C.cairo_stroke(cr)
 
 	setSource(cr, line)
-	C.cairo_set_line_width(cr, 2)
+	C.cairo_set_line_width(cr, C.double(lineWidth))
 	C.cairo_move_to(cr, C.double(cx-14), C.double(cy))
 	C.cairo_line_to(cr, C.double(cx-4), C.double(cy))
 	C.cairo_stroke(cr)

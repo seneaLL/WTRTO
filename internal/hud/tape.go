@@ -68,15 +68,23 @@ func lerpColor(a, b native.Color, t float64) native.Color {
 }
 
 func elementThickness(e Element) int {
+	t := 1
 	if e.Thickness > 0 {
-		return e.Thickness
+		t = e.Thickness
+	}
+	if e.Bold {
+		t += 2
 	}
 
-	return 1
+	return t
 }
 
 func tickValueAt(offsetPx, value, pxPerUnit, dirMul float64) float64 {
 	return value + offsetPx/(pxPerUnit*dirMul)
+}
+
+func glowColorOf(col native.Color, alpha float64) native.Color {
+	return native.Color{R: col.R, G: col.G, B: col.B, A: uint8(float64(col.A) * alpha)}
 }
 
 const spineSegmentPx = 4
@@ -114,12 +122,17 @@ func tapeVSign(e Element) int {
 	}
 }
 
-func drawTapeV(c *native.Canvas, cx, cy, lengthPx int, value float64, e Element, v Values, baseCol native.Color) {
+func drawTapeV(c *native.Canvas, cx, cy, lengthPx int, value float64, e Element, v Values, baseCol native.Color, glow bool) {
 	if e.Range <= 0 || e.MinorStep <= 0 {
 		return
 	}
 	col := tapeZoneColor(e, v, value, baseCol)
 	thickness := elementThickness(e)
+	glowAlpha := 0.0
+	if glow {
+		thickness += 5
+		glowAlpha = 0.35
+	}
 	half := e.Range / 2
 	pxPerUnit := float64(lengthPx) / e.Range
 	fontSize := e.FontSize
@@ -143,6 +156,9 @@ func drawTapeV(c *native.Canvas, cx, cy, lengthPx int, value float64, e Element,
 			x, y := arcPointV(cx, cy, radius, sign, t/float64(radius), 0)
 			if havePrev {
 				segCol := tapeZoneColor(e, v, tickValueAt(t-spineSegmentPx/2, value, pxPerUnit, dirMul), baseCol)
+				if glow {
+					segCol = glowColorOf(segCol, glowAlpha)
+				}
 				c.Line([]native.Point{{X: prevX, Y: prevY}, {X: x, Y: y}}, segCol, thickness)
 			}
 			prevX, prevY, havePrev = x, y, true
@@ -154,6 +170,9 @@ func drawTapeV(c *native.Canvas, cx, cy, lengthPx int, value float64, e Element,
 				py2 = lengthPx / 2
 			}
 			segCol := tapeZoneColor(e, v, tickValueAt(float64(py)+spineSegmentPx/2, value, pxPerUnit, dirMul), baseCol)
+			if glow {
+				segCol = glowColorOf(segCol, glowAlpha)
+			}
 			c.Line([]native.Point{{X: float64(cx), Y: float64(cy + py)}, {X: float64(cx), Y: float64(cy + py2)}}, segCol, thickness)
 		}
 	}
@@ -188,17 +207,29 @@ func drawTapeV(c *native.Canvas, cx, cy, lengthPx int, value float64, e Element,
 			tx2, ty2 = float64(cx+sign*tickLen), ty
 			lx, ly = float64(cx+sign*(tickLen+6)), ty
 		}
-		c.Line([]native.Point{{X: tx1, Y: ty1}, {X: tx2, Y: ty2}}, tickCol, thickness)
+		lineCol := tickCol
+		if glow {
+			lineCol = glowColorOf(lineCol, glowAlpha)
+		}
+		c.Line([]native.Point{{X: tx1, Y: ty1}, {X: tx2, Y: ty2}}, lineCol, thickness)
 
-		if major {
+		if major && !glow {
 			label := fmt.Sprintf("%.0f", display)
 			w, h := c.TextSize(label, fontSize)
 			lxi := int(math.Round(lx))
 			if sign < 0 {
 				lxi -= w
 			}
-			c.Text(lxi, int(math.Round(ly))+h/2-2, tickCol, fontSize, label)
+			ty := int(math.Round(ly)) + h/2 - 2
+			if e.Glow {
+				glowBehindText(c, lxi, ty, tickCol, fontSize, label)
+			}
+			c.Text(lxi, ty, tickCol, fontSize, label)
 		}
+	}
+
+	if glow {
+		return
 	}
 
 	boxLabel := fmt.Sprintf("%.0f", value)
@@ -215,12 +246,17 @@ func drawTapeV(c *native.Canvas, cx, cy, lengthPx int, value float64, e Element,
 	c.TextCentered(boxRect, col, fontSize+2, boxLabel)
 }
 
-func drawTapeH(c *native.Canvas, cx, cy, lengthPx int, value float64, e Element, v Values, baseCol native.Color) {
+func drawTapeH(c *native.Canvas, cx, cy, lengthPx int, value float64, e Element, v Values, baseCol native.Color, glow bool) {
 	if e.Range <= 0 || e.MinorStep <= 0 {
 		return
 	}
 	col := tapeZoneColor(e, v, value, baseCol)
 	thickness := elementThickness(e)
+	glowAlpha := 0.0
+	if glow {
+		thickness += 5
+		glowAlpha = 0.35
+	}
 	half := e.Range / 2
 	pxPerUnit := float64(lengthPx) / e.Range
 	fontSize := e.FontSize
@@ -242,6 +278,9 @@ func drawTapeH(c *native.Canvas, cx, cy, lengthPx int, value float64, e Element,
 			x, y := arcPointH(cx, cy, radius, t/float64(radius), 0)
 			if havePrev {
 				segCol := tapeZoneColor(e, v, tickValueAt(t-spineSegmentPx/2, value, pxPerUnit, dirMul), baseCol)
+				if glow {
+					segCol = glowColorOf(segCol, glowAlpha)
+				}
 				c.Line([]native.Point{{X: prevX, Y: prevY}, {X: x, Y: y}}, segCol, thickness)
 			}
 			prevX, prevY, havePrev = x, y, true
@@ -253,6 +292,9 @@ func drawTapeH(c *native.Canvas, cx, cy, lengthPx int, value float64, e Element,
 				px2 = lengthPx / 2
 			}
 			segCol := tapeZoneColor(e, v, tickValueAt(float64(px)+spineSegmentPx/2, value, pxPerUnit, dirMul), baseCol)
+			if glow {
+				segCol = glowColorOf(segCol, glowAlpha)
+			}
 			c.Line([]native.Point{{X: float64(cx + px), Y: float64(cy)}, {X: float64(cx + px2), Y: float64(cy)}}, segCol, thickness)
 		}
 	}
@@ -287,13 +329,29 @@ func drawTapeH(c *native.Canvas, cx, cy, lengthPx int, value float64, e Element,
 			tx2, ty2 = tx, float64(cy-tickLen)
 			lx, ly = tx, float64(cy-tickLen-6)
 		}
-		c.Line([]native.Point{{X: tx1, Y: ty1}, {X: tx2, Y: ty2}}, tickCol, thickness)
+		lineCol := tickCol
+		if glow {
+			lineCol = glowColorOf(lineCol, glowAlpha)
+		}
+		c.Line([]native.Point{{X: tx1, Y: ty1}, {X: tx2, Y: ty2}}, lineCol, thickness)
 
-		if major {
+		if major && !glow {
 			label := fmt.Sprintf("%.0f", display)
 			w, _ := c.TextSize(label, fontSize)
-			c.Text(int(math.Round(lx))-w/2, int(math.Round(ly)), tickCol, fontSize, label)
+			lxi := int(math.Round(lx)) - w/2
+			lyi := int(math.Round(ly))
+			if e.Glow {
+				glowBehindText(c, lxi, lyi, tickCol, fontSize, label)
+			}
+			c.Text(lxi, lyi, tickCol, fontSize, label)
 		}
+	}
+
+	if glow {
+		markerCol := glowColorOf(col, glowAlpha)
+		c.Line([]native.Point{{X: float64(cx), Y: float64(cy + 4)}, {X: float64(cx - 8), Y: float64(cy + 16)}, {X: float64(cx + 8), Y: float64(cy + 16)}, {X: float64(cx), Y: float64(cy + 4)}}, markerCol, thickness+1)
+
+		return
 	}
 
 	c.Line([]native.Point{{X: float64(cx), Y: float64(cy + 4)}, {X: float64(cx - 8), Y: float64(cy + 16)}, {X: float64(cx + 8), Y: float64(cy + 16)}, {X: float64(cx), Y: float64(cy + 4)}}, col, thickness+1)

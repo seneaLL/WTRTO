@@ -210,6 +210,10 @@ func runOverlay(launcherPID int) {
 	}
 	editState := &hud.EditState{}
 
+	var lastAircraftType string
+	var renderElements []hud.Element
+	resolveDirty := true
+
 	var telMu sync.Mutex
 	var latestInd *telemetry.Indicators
 	var latestState telemetry.State
@@ -302,6 +306,18 @@ func runOverlay(launcherPID int) {
 		mapInfo := latestMapInfo
 		telMu.Unlock()
 
+		aircraftType := ""
+		if ind != nil {
+			aircraftType = ind.Type
+		}
+		if aircraftType != lastAircraftType {
+			lastAircraftType = aircraftType
+			resolveDirty = true
+		}
+		if editMode {
+			resolveDirty = true
+		}
+
 		values := tracker.Update(ind, st)
 		if values.Valid {
 			lastValidValues = values
@@ -338,22 +354,58 @@ func runOverlay(launcherPID int) {
 		renderValues.Valid = renderActive
 
 		wasDragging := editState.Dragging != ""
-		hud.Draw(c, sw, sh, &tmpl, renderValues, editMode, editState, in)
-		changed := wasDragging && editState.Dragging == ""
+		var changed bool
 
-		if editMode {
-			if hud.DrawPropertiesPanel(c, in, sw, sh, &tmpl, editState) {
+		switch {
+		case editMode && editState.OverrideAircraft != "":
+			combined := tmpl
+			combined.Elements = append(append([]hud.Element{}, tmpl.Elements...), editState.OverrideElements...)
+			locked := len(tmpl.Elements)
+
+			hud.Draw(c, sw, sh, &combined, renderValues, editMode, editState, in, locked)
+			changed = wasDragging && editState.Dragging == ""
+
+			if hud.DrawPropertiesPanel(c, in, sw, sh, &combined, editState, aircraftType) {
 				changed = true
 			}
+			if editState.PendingDialog != "" {
+				w.Hide()
+				hud.ResolvePendingDialog(&combined, editState)
+				w.Show(true)
+			}
+			if changed {
+				editState.OverrideElements = append([]hud.Element{}, combined.Elements[locked:]...)
+				hud.SaveOverride(hud.AircraftOverride{
+					BaseTemplate: tmpl.Name,
+					Aircraft:     editState.OverrideAircraft,
+					Elements:     editState.OverrideElements,
+				})
+			}
 
+		case editMode:
+			hud.Draw(c, sw, sh, &tmpl, renderValues, editMode, editState, in, 0)
+			changed = wasDragging && editState.Dragging == ""
+
+			if hud.DrawPropertiesPanel(c, in, sw, sh, &tmpl, editState, aircraftType) {
+				changed = true
+			}
 			if editState.PendingDialog != "" {
 				w.Hide()
 				hud.ResolvePendingDialog(&tmpl, editState)
 				w.Show(true)
 			}
-		}
-		if changed {
-			hud.Save(tmpl)
+			if changed {
+				hud.Save(tmpl)
+			}
+
+		default:
+			if resolveDirty {
+				renderElements, _ = hud.Resolve(tmpl, aircraftType)
+				resolveDirty = false
+			}
+			renderTmpl := tmpl
+			renderTmpl.Elements = renderElements
+			hud.Draw(c, sw, sh, &renderTmpl, renderValues, editMode, editState, in, 0)
 		}
 
 		if editMode {
@@ -724,7 +776,7 @@ func launcherFrame(c *native.Canvas, in *native.Input, w *native.Window) bool {
 	}
 
 	if fpsDropdownOpen {
-		newIdx, selected := native.SelectList(c, originalIn, fpsRect, fpsOptionLabels(), fpsIndex(fpsLimit), &fpsDropdownScroll, curH, colorPanel, colorPanelHover, colorText, colorTextDim, 13)
+		newIdx, selected := native.SelectList(c, originalIn, fpsRect, fpsOptionLabels(), nil, fpsIndex(fpsLimit), &fpsDropdownScroll, curH, colorPanel, colorPanelHover, colorText, colorTextDim, colorTextDim, 13)
 		switch {
 		case selected:
 			fpsLimit = fpsOptions[newIdx]

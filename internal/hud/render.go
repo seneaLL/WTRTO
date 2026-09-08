@@ -35,6 +35,10 @@ type EditState struct {
 	StatusOK        bool
 
 	PendingDialog string
+
+	OverrideAircraft string
+	OverrideElements []Element
+	AircraftFieldBuf string
 }
 
 const PanelWidth = 340
@@ -169,10 +173,6 @@ func bindingValue(b Binding, v Values) float64 {
 		return v.FuelTimeMin
 	case BindFuelRate:
 		return v.FuelRateKgM
-	case BindOilTemp1:
-		return v.OilTemp1
-	case BindOilTemp2:
-		return v.OilTemp2
 	case BindCompass:
 		return v.Compass
 	case BindAoA:
@@ -196,6 +196,8 @@ func bindingValue(b Binding, v Values) float64 {
 		return v.Flaps
 	case BindGearPct:
 		return v.GearPct
+	case BindAirbrake:
+		return v.Airbrake
 	case BindRollRate:
 		return v.RollRate
 	case BindFuelPct:
@@ -208,83 +210,10 @@ func bindingValue(b Binding, v Values) float64 {
 		return v.Turn
 	case BindWingSweep:
 		return v.WingSweep
+	}
 
-	case BindThrottle1:
-		return v.EngineThrottle[0]
-	case BindThrottle2:
-		return v.EngineThrottle[1]
-	case BindThrottle3:
-		return v.EngineThrottle[2]
-	case BindThrottle4:
-		return v.EngineThrottle[3]
-
-	case BindRPM1:
-		return v.EngineRPM[0]
-	case BindRPM2:
-		return v.EngineRPM[1]
-	case BindRPM3:
-		return v.EngineRPM[2]
-	case BindRPM4:
-		return v.EngineRPM[3]
-
-	case BindManifold1:
-		return v.EngineManifold[0]
-	case BindManifold2:
-		return v.EngineManifold[1]
-	case BindManifold3:
-		return v.EngineManifold[2]
-	case BindManifold4:
-		return v.EngineManifold[3]
-
-	case BindOilTemp3:
-		return v.EngineOilTemp[2]
-	case BindOilTemp4:
-		return v.EngineOilTemp[3]
-
-	case BindWaterTemp1:
-		return v.EngineWaterTemp[0]
-	case BindWaterTemp2:
-		return v.EngineWaterTemp[1]
-	case BindWaterTemp3:
-		return v.EngineWaterTemp[2]
-	case BindWaterTemp4:
-		return v.EngineWaterTemp[3]
-
-	case BindPower1:
-		return v.EnginePower[0]
-	case BindPower2:
-		return v.EnginePower[1]
-	case BindPower3:
-		return v.EnginePower[2]
-	case BindPower4:
-		return v.EnginePower[3]
-
-	case BindThrust1:
-		return v.EngineThrust[0]
-	case BindThrust2:
-		return v.EngineThrust[1]
-	case BindThrust3:
-		return v.EngineThrust[2]
-	case BindThrust4:
-		return v.EngineThrust[3]
-
-	case BindEfficiency1:
-		return v.EngineEfficiency[0]
-	case BindEfficiency2:
-		return v.EngineEfficiency[1]
-	case BindEfficiency3:
-		return v.EngineEfficiency[2]
-	case BindEfficiency4:
-		return v.EngineEfficiency[3]
-
-	case BindPropPitch1:
-		return v.EnginePropPitch[0]
-	case BindPropPitch2:
-		return v.EnginePropPitch[1]
-	case BindPropPitch3:
-		return v.EnginePropPitch[2]
-	case BindPropPitch4:
-		return v.EnginePropPitch[3]
+	if ref, ok := engineBindingIndex[b]; ok {
+		return ref.metric.get(v, ref.n-1)
 	}
 
 	return 0
@@ -361,7 +290,27 @@ var (
 	horizonSky    = native.Color{R: 40, G: 95, B: 165, A: 230}
 	horizonGround = native.Color{R: 95, G: 65, B: 35, A: 230}
 	editBgColor   = native.Color{R: 14, G: 16, B: 20, A: 235}
+	defaultTextBg = Color{R: 10, G: 12, B: 15, A: 190}
 )
+
+var textGlowOffsets = []struct {
+	dx, dy int
+	alpha  float64
+}{
+	{1, 0, 0.11}, {-1, 0, 0.11}, {0, 1, 0.11}, {0, -1, 0.11},
+	{1, 1, 0.07}, {-1, 1, 0.07}, {1, -1, 0.07}, {-1, -1, 0.07},
+}
+
+func glowBehindText(c *native.Canvas, x, y int, col native.Color, fs int, text string) {
+	for _, off := range textGlowOffsets {
+		a := uint8(float64(col.A) * off.alpha)
+		if a == 0 {
+			continue
+		}
+		gcol := native.Color{R: col.R, G: col.G, B: col.B, A: a}
+		c.Text(x+off.dx, y+off.dy, gcol, fs, text)
+	}
+}
 
 func clampToScreen(b native.Rect, screenW, screenH, x, y int) (int, int) {
 	if b.X < 0 {
@@ -379,7 +328,7 @@ func clampToScreen(b native.Rect, screenW, screenH, x, y int) (int, int) {
 	return x, y
 }
 
-func Draw(c *native.Canvas, screenW, screenH int, tmpl *Template, v Values, editMode bool, edit *EditState, in *native.Input) {
+func Draw(c *native.Canvas, screenW, screenH int, tmpl *Template, v Values, editMode bool, edit *EditState, in *native.Input, locked int) {
 	if !v.Valid && !editMode {
 		return
 	}
@@ -416,34 +365,45 @@ func Draw(c *native.Canvas, screenW, screenH int, tmpl *Template, v Values, edit
 			x, y = clampToScreen(native.Rect{X: x, Y: y - th, W: tw, H: th + 4}, screenW, screenH, x, y)
 		}
 
-		if e.GlowEnabled {
-			var bound native.Rect
-			switch e.Kind {
-			case KindHorizon:
-				r := int(e.Size * float64(screenH))
-				bound = native.Rect{X: x - r, Y: y - r, W: r * 2, H: r * 2}
-			case KindTapeV, KindTapeH:
-				bound = elementBounds(*e, c, screenW, screenH, x, y)
-			default:
-				tw, th := c.TextSize(text, fs)
-				bound = native.Rect{X: x, Y: y - th, W: tw, H: th + 4}
-			}
-			c.Glow(bound, glowColor(*e, v), e.GlowIntensity)
-		}
-
 		switch e.Kind {
 		case KindHorizon:
 			r := int(e.Size * float64(screenH))
 			col := toNativeColor(e.Color)
-			c.DrawArtificialHorizon(x, y, r, v.Pitch, v.Roll, horizonSky, horizonGround, col, col)
+			horizonLineWidth := 2
+			if e.Bold {
+				horizonLineWidth = 4
+			}
+			if e.Glow {
+				c.Glow(native.Rect{X: x - r, Y: y - r, W: r * 2, H: r * 2}, col, 0.7)
+			}
+			c.DrawArtificialHorizon(x, y, r, v.Pitch, v.Roll, horizonSky, horizonGround, col, col, horizonLineWidth)
 		case KindTapeV:
 			length := int(e.Length * float64(screenH))
-			drawTapeV(c, x, y, length, bindingValue(e.Binding, v), *e, v, toNativeColor(e.Color))
+			bindVal := bindingValue(e.Binding, v)
+			if e.Glow {
+				drawTapeV(c, x, y, length, bindVal, *e, v, toNativeColor(e.Color), true)
+			}
+			drawTapeV(c, x, y, length, bindVal, *e, v, toNativeColor(e.Color), false)
 		case KindTapeH:
 			length := int(e.Length * float64(screenW))
-			drawTapeH(c, x, y, length, bindingValue(e.Binding, v), *e, v, toNativeColor(e.Color))
+			bindVal := bindingValue(e.Binding, v)
+			if e.Glow {
+				drawTapeH(c, x, y, length, bindVal, *e, v, toNativeColor(e.Color), true)
+			}
+			drawTapeH(c, x, y, length, bindVal, *e, v, toNativeColor(e.Color), false)
 		default:
 			col := elementColor(*e, v)
+			if e.BgEnabled {
+				tw, th := c.TextSize(text, fs)
+				bg := e.BgColor
+				if bg.A == 0 {
+					bg = defaultTextBg
+				}
+				c.FillRoundedRect(native.Rect{X: x - 5, Y: y - th - 4, W: tw + 10, H: th + 10}, native.RadiusSmall, toNativeColor(bg))
+			}
+			if e.Glow {
+				glowBehindText(c, x, y, col, fs, text)
+			}
 			if e.Bold {
 				c.TextBold(x, y, col, fs, text)
 			} else {
@@ -458,7 +418,9 @@ func Draw(c *native.Canvas, screenW, screenH int, tmpl *Template, v Values, edit
 
 			borderCol := native.Color{R: 255, G: 255, B: 255, A: 130}
 			borderWidth := 1
-			if edit.Selected == e.ID {
+			if i < locked {
+				borderCol = native.Color{R: 150, G: 150, B: 150, A: 90}
+			} else if edit.Selected == e.ID {
 				borderCol = native.Color{R: 90, G: 180, B: 255, A: 220}
 				borderWidth = 2
 			}
@@ -472,7 +434,7 @@ func Draw(c *native.Canvas, screenW, screenH int, tmpl *Template, v Values, edit
 
 	if editMode && !readOnly && in.Pressed && edit.Dragging == "" {
 		var hits []int
-		for i := range tmpl.Elements {
+		for i := locked; i < len(tmpl.Elements); i++ {
 			if elemBounds[i].Contains(in.MouseX, in.MouseY) {
 				hits = append(hits, i)
 			}
@@ -633,19 +595,6 @@ func Draw(c *native.Canvas, screenW, screenH int, tmpl *Template, v Values, edit
 		edit.Selected = ""
 		edit.FocusField = ""
 		edit.OpenDropdown = ""
-	}
-}
-
-func glowColor(e Element, v Values) native.Color {
-	if !e.GlowUseOwn {
-		return toNativeColor(e.GlowColor)
-	}
-
-	switch e.Kind {
-	case KindTapeV, KindTapeH:
-		return tapeZoneColor(e, v, bindingValue(e.Binding, v), toNativeColor(e.Color))
-	default:
-		return elementColor(e, v)
 	}
 }
 

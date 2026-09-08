@@ -48,13 +48,73 @@ func newElement() Element {
 
 func kindOptions() []string { return []string{"text", "tape_v", "tape_h"} }
 
-func bindingOptions() []string {
-	opts := make([]string, len(AllBindings))
-	for i, b := range AllBindings {
-		opts[i] = string(b)
+type bindingOption struct {
+	Value Binding
+	Label string
+	Group string
+}
+
+var staticBindingMeta = []struct {
+	value    Binding
+	labelKey string
+	groupKey string
+}{
+	{BindIAS, "editor.metric.ias", "editor.group_speed"},
+	{BindTAS, "editor.metric.tas", "editor.group_speed"},
+	{BindMach, "editor.metric.mach", "editor.group_speed"},
+	{BindThrottlePct, "editor.metric.throttle_pct", "editor.group_speed"},
+
+	{BindAltitude, "editor.metric.altitude", "editor.group_altitude"},
+	{BindRadioAlt, "editor.metric.radio_altitude", "editor.group_altitude"},
+	{BindVSpeed, "editor.metric.vspeed", "editor.group_altitude"},
+
+	{BindCompass, "editor.metric.compass", "editor.group_navigation"},
+	{BindTurn, "editor.metric.turn", "editor.group_navigation"},
+
+	{BindAoA, "editor.metric.aoa", "editor.group_aero"},
+	{BindAoS, "editor.metric.aos", "editor.group_aero"},
+	{BindGLoad, "editor.metric.gload", "editor.group_aero"},
+	{BindIASRate, "editor.metric.ias_rate", "editor.group_aero"},
+	{BindWingSweep, "editor.metric.wing_sweep", "editor.group_aero"},
+
+	{BindAileron, "editor.metric.aileron", "editor.group_controls"},
+	{BindElevator, "editor.metric.elevator", "editor.group_controls"},
+	{BindRudder, "editor.metric.rudder", "editor.group_controls"},
+	{BindFlaps, "editor.metric.flaps", "editor.group_controls"},
+	{BindGearPct, "editor.metric.gear", "editor.group_controls"},
+	{BindAirbrake, "editor.metric.airbrake", "editor.group_controls"},
+	{BindRollRate, "editor.metric.roll_rate", "editor.group_controls"},
+	{BindTrimmer, "editor.metric.trimmer", "editor.group_controls"},
+
+	{BindFuelKg, "editor.metric.fuel_kg", "editor.group_fuel"},
+	{BindFuelPct, "editor.metric.fuel_pct", "editor.group_fuel"},
+	{BindFuelTime, "editor.metric.fuel_time", "editor.group_fuel"},
+	{BindFuelRate, "editor.metric.fuel_rate", "editor.group_fuel"},
+}
+
+func bindingOptions() []bindingOption {
+	opts := make([]bindingOption, 0, len(staticBindingMeta)+MaxEngines*len(engineMetrics))
+	for _, s := range staticBindingMeta {
+		opts = append(opts, bindingOption{Value: s.value, Label: i18n.T(s.labelKey), Group: i18n.T(s.groupKey)})
+	}
+	for n := 1; n <= MaxEngines; n++ {
+		group := fmt.Sprintf(i18n.T("editor.group_engine_fmt"), n)
+		for _, m := range engineMetrics {
+			opts = append(opts, bindingOption{Value: engineBinding(m, n), Label: i18n.T(m.labelKey), Group: group})
+		}
 	}
 
 	return opts
+}
+
+func indexOfBindingOption(opts []bindingOption, v Binding) int {
+	for i, o := range opts {
+		if o.Value == v {
+			return i
+		}
+	}
+
+	return 0
 }
 
 func indexOf(opts []string, v string) int {
@@ -104,7 +164,8 @@ func row(panelX, y int) native.Rect {
 
 type dropdownField struct {
 	rect    native.Rect
-	options []string
+	labels  []string
+	groups  []string
 	current int
 	apply   func(int)
 }
@@ -112,6 +173,11 @@ type dropdownField struct {
 type tooltipInfo struct {
 	rect native.Rect
 	text string
+}
+
+type selectExtra struct {
+	Labels []string
+	Groups []string
 }
 
 func drawTooltip(c *native.Canvas, t tooltipInfo, screenW, screenH int) {
@@ -138,7 +204,7 @@ func drawTooltip(c *native.Canvas, t tooltipInfo, screenW, screenH int) {
 	c.TextCentered(box, textCol, fontSize, t.text)
 }
 
-func DrawPropertiesPanel(c *native.Canvas, in *native.Input, screenW, screenH int, tmpl *Template, edit *EditState) bool {
+func DrawPropertiesPanel(c *native.Canvas, in *native.Input, screenW, screenH int, tmpl *Template, edit *EditState, currentAircraft string) bool {
 	originalIn := in
 	readOnly := IsBuiltin(tmpl.Name)
 	changed := false
@@ -159,23 +225,38 @@ func DrawPropertiesPanel(c *native.Canvas, in *native.Input, screenW, screenH in
 		return clicked
 	}
 
-	selectField := func(key string, r native.Rect, options []string, current int, apply func(int)) {
+	selectField := func(key string, r native.Rect, values []string, current int, apply func(int), extra ...selectExtra) {
+		labels := values
+		var groups []string
+		if len(extra) > 0 {
+			if extra[0].Labels != nil {
+				labels = extra[0].Labels
+			}
+			groups = extra[0].Groups
+		}
+
 		cur := "-"
-		if current >= 0 && current < len(options) {
-			cur = options[current]
+		if current >= 0 && current < len(labels) {
+			cur = labels[current]
 		}
 		if native.SelectBox(c, in, r, cur, edit.OpenDropdown == key, btnBg, btnHover, textCol, 13) {
 			if edit.OpenDropdown == key {
 				edit.OpenDropdown = ""
 			} else {
 				edit.OpenDropdown = key
-				edit.DropdownScroll = 0
+				row := native.SelectRowForOption(current, groups)
+				scroll := row - native.SelectMaxVisibleRows/2
+				if scroll < 0 {
+					scroll = 0
+				}
+				edit.DropdownScroll = scroll
 			}
 		}
 		if edit.OpenDropdown == key {
-			pendingDropdown = &dropdownField{rect: r, options: options, current: current, apply: apply}
+			pendingDropdown = &dropdownField{rect: r, labels: labels, groups: groups, current: current, apply: apply}
 
-			listBounds := native.SelectListBounds(r, len(options), screenH)
+			rows := native.SelectDisplayRows(len(labels), groups)
+			listBounds := native.SelectListBounds(r, rows, screenH)
 			if listBounds.Contains(in.MouseX, in.MouseY) {
 				masked := *in
 				masked.MouseX = -1
@@ -326,6 +407,22 @@ func DrawPropertiesPanel(c *native.Canvas, in *native.Input, screenW, screenH in
 		return changed
 	}
 
+	if edit.PanelTab != "element" && edit.OverrideAircraft != "" {
+		wrapped(fmt.Sprintf(i18n.T("editor.override_editing_fmt"), edit.OverrideAircraft, tmpl.Name), labelCol, 12)
+		y += 8
+
+		backRect := row(panelX, y)
+		if native.Button(c, in, backRect, i18n.T("editor.override_back"), btnBg, btnHover, textCol, 13) {
+			edit.OverrideAircraft = ""
+			edit.OverrideElements = nil
+			edit.Selected = ""
+			edit.FocusField = ""
+		}
+		y += 40 + panelGroupGap
+
+		return finish()
+	}
+
 	if edit.PanelTab != "element" {
 		label(i18n.T("editor.active_template"))
 		names, _ := List()
@@ -374,7 +471,7 @@ func DrawPropertiesPanel(c *native.Canvas, in *native.Input, screenW, screenH in
 			} else if IsBuiltin(name) {
 				edit.StatusMsg, edit.StatusOK = i18n.T("editor.name_reserved"), false
 			} else {
-				fork := Template{Name: name, Army: tmpl.Army, Elements: append([]Element(nil), tmpl.Elements...)}
+				fork := Template{Name: name, Army: tmpl.Army, Aircraft: tmpl.Aircraft, Elements: append([]Element(nil), tmpl.Elements...)}
 				if err := Save(fork); err != nil {
 					edit.StatusMsg, edit.StatusOK = i18n.T("editor.save_error_prefix")+err.Error(), false
 				} else {
@@ -425,8 +522,14 @@ func DrawPropertiesPanel(c *native.Canvas, in *native.Input, screenW, screenH in
 			deleteTmplRect := native.Rect{X: tmplBtnX(3), Y: y, W: tmplBtnW, H: tmplBtnH}
 			if iconButton(deleteTmplRect, "trash", i18n.T("editor.delete_template_tip"), dangerBg, dangerHover) {
 				deletedName := tmpl.Name
-				if err := Delete(deletedName); err != nil {
-					edit.StatusMsg, edit.StatusOK = i18n.T("editor.delete_error_prefix")+err.Error(), false
+				var delErr error
+				if tmpl.Aircraft != "" {
+					delErr = DeleteStandalone(tmpl.Aircraft)
+				} else {
+					delErr = Delete(deletedName)
+				}
+				if delErr != nil {
+					edit.StatusMsg, edit.StatusOK = i18n.T("editor.delete_error_prefix")+delErr.Error(), false
 				} else {
 					fallback, ferr := Load(DefaultAirTemplate().Name)
 					if ferr != nil {
@@ -445,6 +548,95 @@ func DrawPropertiesPanel(c *native.Canvas, in *native.Input, screenW, screenH in
 			}
 		}
 		y += 50 + panelGroupGap
+
+		if tmpl.Aircraft != "" {
+			wrapped(fmt.Sprintf(i18n.T("editor.aircraft_only_notice_fmt"), tmpl.Aircraft), labelCol, 12)
+			y += 6 + panelGroupGap
+		} else {
+			label(i18n.T("editor.aircraft_id"))
+			aircraftRect := native.Rect{X: panelX + 16, Y: y, W: PanelWidth - 32 - 44, H: 28}
+			av, asub := textField("aircraftfield", aircraftRect, edit.AircraftFieldBuf, 13)
+			if av != edit.AircraftFieldBuf {
+				edit.AircraftFieldBuf = av
+			}
+			if asub {
+				edit.FocusField = ""
+			}
+			useCurRect := native.Rect{X: aircraftRect.X + aircraftRect.W + 8, Y: y, W: 36, H: 28}
+			if iconButton(useCurRect, "download", i18n.T("editor.use_current_aircraft_tip"), btnBg, btnHover) {
+				if currentAircraft == "" {
+					edit.StatusMsg, edit.StatusOK = i18n.T("editor.no_current_aircraft"), false
+				} else {
+					edit.AircraftFieldBuf = currentAircraft
+				}
+			}
+			y += 36
+
+			aircraftBtnW := PanelWidth - 32
+			newAircraftRect := native.Rect{X: panelX + 16, Y: y, W: aircraftBtnW, H: 36}
+			if native.Button(c, in, newAircraftRect, i18n.T("editor.new_aircraft_template"), btnBg, btnHover, textCol, 13) {
+				if edit.AircraftFieldBuf == "" {
+					edit.StatusMsg, edit.StatusOK = i18n.T("editor.aircraft_id_required"), false
+				} else {
+					blank := Template{Name: fmt.Sprintf(i18n.T("editor.new_template_name_fmt"), time.Now().Unix()%100000), Army: "air", Aircraft: edit.AircraftFieldBuf}
+					Save(blank)
+					*tmpl = blank
+					edit.Selected = ""
+					edit.FocusField = ""
+					edit.ShareCode = ""
+					edit.AircraftFieldBuf = ""
+					edit.StatusMsg, edit.StatusOK = i18n.T("editor.created_prefix")+blank.Name, true
+				}
+			}
+			y += 44
+
+			overrideRect := native.Rect{X: panelX + 16, Y: y, W: aircraftBtnW, H: 36}
+			if native.Button(c, in, overrideRect, i18n.T("editor.override_open"), btnBg, btnHover, textCol, 13) {
+				if edit.AircraftFieldBuf == "" {
+					edit.StatusMsg, edit.StatusOK = i18n.T("editor.aircraft_id_required"), false
+				} else {
+					existing, _ := LoadOverride(tmpl.Name, edit.AircraftFieldBuf)
+					edit.OverrideAircraft = edit.AircraftFieldBuf
+					edit.OverrideElements = append([]Element(nil), existing.Elements...)
+					edit.Selected = ""
+					edit.FocusField = ""
+					edit.OpenDropdown = ""
+				}
+			}
+			y += 44 + panelGroupGap
+
+			overrideAircraft, _ := ListOverrides(tmpl.Name)
+			if len(overrideAircraft) > 0 {
+				label(i18n.T("editor.override_list"))
+				ovIdx := indexOf(overrideAircraft, edit.AircraftFieldBuf)
+				selectField("override_list", row(panelX, y), overrideAircraft, ovIdx, func(i int) {
+					edit.AircraftFieldBuf = overrideAircraft[i]
+				})
+				y += 34
+
+				delOverrideRect := row(panelX, y)
+				if edit.AircraftFieldBuf != "" && native.Button(c, in, delOverrideRect, i18n.T("editor.override_delete"), dangerBg, dangerHover, textCol, 13) {
+					DeleteOverride(tmpl.Name, edit.AircraftFieldBuf)
+					edit.AircraftFieldBuf = ""
+				}
+				y += 36 + panelGroupGap
+			}
+		}
+
+		if standalone, _ := ListStandalone(); len(standalone) > 0 {
+			label(i18n.T("editor.standalone_list"))
+			names := make([]string, len(standalone))
+			for i, t := range standalone {
+				names[i] = t.Name + " (" + t.Aircraft + ")"
+			}
+			selectField("standalone_list", row(panelX, y), names, -1, func(i int) {
+				*tmpl = standalone[i]
+				edit.Selected = ""
+				edit.FocusField = ""
+				edit.ShareCode = ""
+			})
+			y += 34 + panelGroupGap
+		}
 
 		label(i18n.T("editor.template_code"))
 		codeRect := native.Rect{X: panelX + 16, Y: y, W: PanelWidth - 32 - 92, H: 28}
@@ -567,13 +759,21 @@ func DrawPropertiesPanel(c *native.Canvas, in *native.Input, screenW, screenH in
 	if e.Kind != KindHorizon {
 		label(i18n.T("editor.value"))
 		bopts := bindingOptions()
-		selectField("binding", row(panelX, y), bopts, indexOf(bopts, string(e.Binding)), func(i int) {
-			newBind := Binding(bopts[i])
+		values := make([]string, len(bopts))
+		labels := make([]string, len(bopts))
+		groups := make([]string, len(bopts))
+		for i, o := range bopts {
+			values[i] = string(o.Value)
+			labels[i] = o.Label
+			groups[i] = o.Group
+		}
+		selectField("binding", row(panelX, y), values, indexOfBindingOption(bopts, e.Binding), func(i int) {
+			newBind := Binding(values[i])
 			if newBind != e.Binding {
 				e.Binding = newBind
 				changed = true
 			}
-		})
+		}, selectExtra{Labels: labels, Groups: groups})
 		y += 36
 
 		if supportsAutoColor(e.Binding) {
@@ -607,17 +807,46 @@ func DrawPropertiesPanel(c *native.Canvas, in *native.Input, screenW, screenH in
 		}
 		y += 36
 
-		precR, boldR := pairRow(i18n.T("editor.precision"), "", 0.4)
-		nv2 := numberField("el_precision", precR, float64(e.Precision), 1, 0)
+		label(i18n.T("editor.precision"))
+		nv2 := numberField("el_precision", row(panelX, y), float64(e.Precision), 1, 0)
 		if int(nv2) != e.Precision {
 			e.Precision = int(nv2)
 			changed = true
 		}
+		y += 36
+
+		boldR, glowR := pairRow("", "", 0.5)
 		if native.Checkbox(c, in, native.Rect{X: boldR.X, Y: boldR.Y, W: 20, H: 20}, e.Bold, fieldBorder, fieldFocus, textCol, 13, i18n.T("editor.bold")) {
 			e.Bold = !e.Bold
 			changed = true
 		}
-		y += 36 + panelGroupGap
+		if native.Checkbox(c, in, native.Rect{X: glowR.X, Y: glowR.Y, W: 20, H: 20}, e.Glow, fieldBorder, fieldFocus, textCol, 13, i18n.T("editor.glow")) {
+			e.Glow = !e.Glow
+			changed = true
+		}
+		y += 34 + panelGroupGap
+
+		bgRowRect := row(panelX, y)
+		if native.Checkbox(c, in, native.Rect{X: bgRowRect.X, Y: bgRowRect.Y, W: 20, H: 20}, e.BgEnabled, fieldBorder, fieldFocus, textCol, 13, i18n.T("editor.background")) {
+			e.BgEnabled = !e.BgEnabled
+			if e.BgEnabled && e.BgColor.A == 0 {
+				e.BgColor = defaultTextBg
+			}
+			changed = true
+		}
+		y += 34
+
+		if e.BgEnabled {
+			label(i18n.T("editor.background_color"))
+			bgPickerH := native.ColorPickerHeight(PanelWidth - 32)
+			newBgCol := native.ColorPicker(c, in, native.Rect{X: panelX + 16, Y: y, W: PanelWidth - 32, H: bgPickerH}, toNativeColor(e.BgColor))
+			if newBgCol != toNativeColor(e.BgColor) {
+				e.BgColor = Color{R: newBgCol.R, G: newBgCol.G, B: newBgCol.B, A: newBgCol.A}
+				changed = true
+			}
+			y += bgPickerH + 16
+		}
+		y += panelGroupGap
 	}
 
 	if e.Kind != KindHorizon {
@@ -659,6 +888,19 @@ func DrawPropertiesPanel(c *native.Canvas, in *native.Input, screenW, screenH in
 			y += 36
 		}
 		y += panelGroupGap
+	}
+
+	if e.Kind != KindText {
+		boldRect, glowRect := pairRow("", "", 0.5)
+		if native.Checkbox(c, in, native.Rect{X: boldRect.X, Y: boldRect.Y, W: 20, H: 20}, e.Bold, fieldBorder, fieldFocus, textCol, 13, i18n.T("editor.bold")) {
+			e.Bold = !e.Bold
+			changed = true
+		}
+		if native.Checkbox(c, in, native.Rect{X: glowRect.X, Y: glowRect.Y, W: 20, H: 20}, e.Glow, fieldBorder, fieldFocus, textCol, 13, i18n.T("editor.glow")) {
+			e.Glow = !e.Glow
+			changed = true
+		}
+		y += 34 + panelGroupGap
 	}
 
 	if e.Kind == KindTapeV || e.Kind == KindTapeH {
@@ -816,59 +1058,6 @@ func DrawPropertiesPanel(c *native.Canvas, in *native.Input, screenW, screenH in
 		y += panelGroupGap
 	}
 
-	glowRect := row(panelX, y)
-	if native.Checkbox(c, in, native.Rect{X: glowRect.X, Y: glowRect.Y, W: 20, H: 20}, e.GlowEnabled, fieldBorder, fieldFocus, textCol, 13, i18n.T("editor.glow")) {
-		e.GlowEnabled = !e.GlowEnabled
-		if e.GlowEnabled {
-			if e.GlowIntensity == 0 {
-				e.GlowIntensity = 0.6
-			}
-			if !e.GlowUseOwn && e.GlowColor.A == 0 {
-				e.GlowUseOwn = true
-			}
-		}
-		changed = true
-	}
-	y += 34
-
-	if e.GlowEnabled {
-		ownRect := row(panelX, y)
-		if native.Checkbox(c, in, native.Rect{X: ownRect.X, Y: ownRect.Y, W: 20, H: 20}, e.GlowUseOwn, fieldBorder, fieldFocus, textCol, 13, i18n.T("editor.glow_use_own_color")) {
-			e.GlowUseOwn = !e.GlowUseOwn
-			if !e.GlowUseOwn && e.GlowColor.A == 0 {
-				e.GlowColor = Color{R: 255, G: 255, B: 255, A: 255}
-			}
-			changed = true
-		}
-		y += 34
-
-		if !e.GlowUseOwn {
-			label(i18n.T("editor.glow_color"))
-			glowPickerH := native.ColorPickerHeight(PanelWidth - 32)
-			newGlowCol := native.ColorPicker(c, in, native.Rect{X: panelX + 16, Y: y, W: PanelWidth - 32, H: glowPickerH}, toNativeColor(e.GlowColor))
-			if newGlowCol != toNativeColor(e.GlowColor) {
-				e.GlowColor = Color{R: newGlowCol.R, G: newGlowCol.G, B: newGlowCol.B, A: newGlowCol.A}
-				changed = true
-			}
-			y += glowPickerH + 16
-		}
-
-		label(i18n.T("editor.glow_intensity"))
-		intensityPct := numberField("el_glow_intensity", row(panelX, y), e.GlowIntensity*100, 5, 0)
-		nv := intensityPct / 100
-		if nv < 0 {
-			nv = 0
-		}
-		if nv > 1 {
-			nv = 1
-		}
-		if nv != e.GlowIntensity {
-			e.GlowIntensity = nv
-			changed = true
-		}
-		y += 36
-	}
-
 	delRect := native.Rect{X: panelX + 16, Y: screenH - 60, W: PanelWidth - 32, H: 36}
 	if native.Button(c, in, delRect, i18n.T("editor.delete"), dangerBg, dangerHover, textCol, 14) {
 		tmpl.Elements = append(tmpl.Elements[:idx], tmpl.Elements[idx+1:]...)
@@ -885,7 +1074,7 @@ func drawPendingDropdown(c *native.Canvas, in *native.Input, edit *EditState, pe
 	if pending == nil {
 		return
 	}
-	newIdx, selected := native.SelectList(c, in, pending.rect, pending.options, pending.current, &edit.DropdownScroll, screenH, fieldBg, btnHover, textCol, fieldFocus, 13)
+	newIdx, selected := native.SelectList(c, in, pending.rect, pending.labels, pending.groups, pending.current, &edit.DropdownScroll, screenH, fieldBg, btnHover, textCol, labelCol, fieldFocus, 13)
 	if selected {
 		pending.apply(newIdx)
 		edit.OpenDropdown = ""

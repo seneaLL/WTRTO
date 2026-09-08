@@ -257,6 +257,12 @@ func encodeFlags(e Element) byte {
 	if e.Bold {
 		f |= 1 << 0
 	}
+	if e.Glow {
+		f |= 1 << 5
+	}
+	if e.BgEnabled {
+		f |= 1 << 6
+	}
 	if e.Style == StyleArc {
 		f |= 1 << 1
 	}
@@ -273,8 +279,10 @@ func encodeFlags(e Element) byte {
 	return f
 }
 
-func decodeFlags(f byte, kind ElementKind) (bold bool, style Style, direction Direction, side LabelSide) {
+func decodeFlags(f byte, kind ElementKind) (bold, glow, bgEnabled bool, style Style, direction Direction, side LabelSide) {
 	bold = f&(1<<0) != 0
+	glow = f&(1<<5) != 0
+	bgEnabled = f&(1<<6) != 0
 	if f&(1<<1) != 0 {
 		style = StyleArc
 	} else {
@@ -324,6 +332,7 @@ func encodeTemplateBinary(t Template) []byte {
 			w.uvarint(uint64(e.FontSize))
 			w.uvarint(uint64(e.Precision))
 			w.color(e.Color)
+			w.color(e.BgColor)
 		case KindHorizon:
 			w.frac(e.X)
 			w.frac(e.Y)
@@ -368,12 +377,14 @@ func decodeTemplateBinary(data []byte) (Template, error) {
 			return Template{}, ErrInvalidShareCode
 		}
 		flags := r.byte()
-		bold, style, direction, side := decodeFlags(flags, kind)
+		bold, glow, bgEnabled, style, direction, side := decodeFlags(flags, kind)
 
 		e := Element{
-			ID:   fmt.Sprintf("el_%d_%d", time.Now().UnixNano(), i),
-			Kind: kind,
-			Bold: bold,
+			ID:        fmt.Sprintf("el_%d_%d", time.Now().UnixNano(), i),
+			Kind:      kind,
+			Bold:      bold,
+			Glow:      glow,
+			BgEnabled: bgEnabled,
 		}
 		switch kind {
 		case KindText:
@@ -385,6 +396,7 @@ func decodeTemplateBinary(data []byte) (Template, error) {
 			e.FontSize = int(r.uvarint())
 			e.Precision = int(r.uvarint())
 			e.Color = r.color()
+			e.BgColor = r.color()
 		case KindHorizon:
 			e.X = r.frac()
 			e.Y = r.frac()

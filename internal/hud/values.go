@@ -21,9 +21,6 @@ type Values struct {
 	FuelTimeMin float64
 	FuelPct     float64
 
-	OilTemp1 float64
-	OilTemp2 float64
-
 	Compass float64
 	AoA     float64
 	AoS     float64
@@ -39,6 +36,7 @@ type Values struct {
 	Rudder    float64
 	Flaps     float64
 	GearPct   float64
+	Airbrake  float64
 	RollRate  float64
 	Trimmer   float64
 	RadioAlt  float64
@@ -59,18 +57,16 @@ type Values struct {
 	GLoadLimitPos   float64
 	GLoadLimitNeg   float64
 
-	EngineThrottle   [maxTrackedEngines]float64
-	EngineRPM        [maxTrackedEngines]float64
-	EngineManifold   [maxTrackedEngines]float64
-	EngineOilTemp    [maxTrackedEngines]float64
-	EngineWaterTemp  [maxTrackedEngines]float64
-	EnginePower      [maxTrackedEngines]float64
-	EngineThrust     [maxTrackedEngines]float64
-	EngineEfficiency [maxTrackedEngines]float64
-	EnginePropPitch  [maxTrackedEngines]float64
+	EngineThrottle   [MaxEngines]float64
+	EngineRPM        [MaxEngines]float64
+	EngineManifold   [MaxEngines]float64
+	EngineOilTemp    [MaxEngines]float64
+	EngineWaterTemp  [MaxEngines]float64
+	EnginePower      [MaxEngines]float64
+	EngineThrust     [MaxEngines]float64
+	EngineEfficiency [MaxEngines]float64
+	EnginePropPitch  [MaxEngines]float64
 }
-
-const maxTrackedEngines = 4
 
 type Tracker struct {
 	lastFuelKg   float64
@@ -104,8 +100,6 @@ func (t *Tracker) Update(ind *telemetry.Indicators, st telemetry.State) Values {
 	v.AoS, _ = st.AngleOfSideslipDeg()
 	v.GLoad, _ = st.LateralG()
 	v.VSpeed, _ = st.VerticalSpeedMs()
-	v.OilTemp1, _ = st.EngineOilTempC(1)
-	v.OilTemp2, _ = st.EngineOilTempC(2)
 	v.FuelKg, _ = st.FuelMassKg()
 	if fuel0, ok := st.FuelMassInitialKg(); ok && fuel0 > 0 {
 		v.FuelPct = v.FuelKg / fuel0 * 100
@@ -119,6 +113,7 @@ func (t *Tracker) Update(ind *telemetry.Indicators, st telemetry.State) Values {
 	v.Rudder, _ = st.RudderPct()
 	v.Flaps, _ = st.FlapsPct()
 	v.GearPct, _ = st.GearPct()
+	v.Airbrake, _ = st.AirbrakePct()
 	v.RollRate, _ = st.RollRateDegS()
 	v.Trimmer = ind.Trimmer * 100
 	v.RadioAlt = ind.RadioAltitude
@@ -165,13 +160,21 @@ func (t *Tracker) Update(ind *telemetry.Indicators, st telemetry.State) Values {
 		}
 	}
 
-	for i := 0; i < maxTrackedEngines; i++ {
+	for i := 0; i < MaxEngines; i++ {
 		n := i + 1
 		v.EngineThrottle[i], _ = st.EngineThrottlePct(n)
 		v.EngineRPM[i], _ = st.EngineRPM(n)
 		v.EngineManifold[i], _ = st.EngineManifoldPressureAtm(n)
-		v.EngineOilTemp[i], _ = st.EngineOilTempC(n)
-		v.EngineWaterTemp[i], _ = st.EngineWaterTempC(n)
+		if wt, ok := st.EngineOilTempC(n); ok {
+			v.EngineOilTemp[i] = wt
+		} else if wt, ok := ind.EngineOilTempC(n); ok {
+			v.EngineOilTemp[i] = wt
+		}
+		if wt, ok := st.EngineWaterTempC(n); ok {
+			v.EngineWaterTemp[i] = wt
+		} else if wt, ok := ind.EngineWaterTempC(n); ok {
+			v.EngineWaterTemp[i] = wt
+		}
 		v.EnginePower[i], _ = st.EnginePowerHp(n)
 		v.EngineThrust[i], _ = st.EngineThrustKgs(n)
 		v.EngineEfficiency[i], _ = st.EngineEfficiencyPct(n)

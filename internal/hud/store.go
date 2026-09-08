@@ -64,6 +64,15 @@ func loadFile(p string) (Template, error) {
 }
 
 func Save(t Template) error {
+	if t.Aircraft != "" {
+		p, err := aircraftTemplatePath(t.Aircraft)
+		if err != nil {
+			return err
+		}
+
+		return saveFile(p, t)
+	}
+
 	p, err := templatePath(t.Name)
 	if err != nil {
 		return err
