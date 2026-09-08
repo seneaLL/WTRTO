@@ -2,6 +2,7 @@ package native
 
 import (
 	"strconv"
+	"strings"
 
 	"github.com/seneaLL/WTRTO/internal/clipboard"
 	"github.com/seneaLL/WTRTO/internal/native/icons"
@@ -497,15 +498,56 @@ func SelectListBounds(headerRect Rect, optionCount, containerH int) Rect {
 	return Rect{X: headerRect.X, Y: y, W: headerRect.W, H: h}
 }
 
-func SelectList(c *Canvas, in *Input, headerRect Rect, options []string, current int, scroll *int, containerH int, bg, hoverBg, textCol, borderCol Color, fontSize int) (newIdx int, selected bool) {
-	listRect := SelectListBounds(headerRect, len(options), containerH)
+func SelectDisplayRows(optionCount int, groups []string) int {
+	rows := optionCount
+	if groups == nil {
+		return rows
+	}
+	last := ""
+	for i, g := range groups {
+		if g != "" && (i == 0 || g != last) {
+			rows++
+		}
+		last = g
+	}
+
+	return rows
+}
+
+type selectDisplayRow struct {
+	optIdx int
+	header string
+}
+
+func buildSelectDisplayRows(options []string, groups []string) []selectDisplayRow {
+	rows := make([]selectDisplayRow, 0, len(options)+4)
+	last := ""
+	for i := range options {
+		g := ""
+		if groups != nil {
+			g = groups[i]
+		}
+		if g != "" && (i == 0 || g != last) {
+			rows = append(rows, selectDisplayRow{optIdx: -1, header: g})
+		}
+		rows = append(rows, selectDisplayRow{optIdx: i})
+		last = g
+	}
+
+	return rows
+}
+
+func SelectList(c *Canvas, in *Input, headerRect Rect, options []string, groups []string, current int, scroll *int, containerH int, bg, hoverBg, textCol, headerCol, borderCol Color, fontSize int) (newIdx int, selected bool) {
+	rows := buildSelectDisplayRows(options, groups)
+
+	listRect := SelectListBounds(headerRect, len(rows), containerH)
 
 	visibleRows := listRect.H / SelectRowHeight
 	if visibleRows < 1 {
 		visibleRows = 1
 	}
 
-	maxScroll := len(options) - visibleRows
+	maxScroll := len(rows) - visibleRows
 	if maxScroll < 0 {
 		maxScroll = 0
 	}
@@ -525,26 +567,40 @@ func SelectList(c *Canvas, in *Input, headerRect Rect, options []string, current
 	c.FillRoundedRect(listRect, RadiusSmall, bg)
 
 	newIdx = current
-	visible := len(options) - *scroll
+	visible := len(rows) - *scroll
 	if visible > visibleRows {
 		visible = visibleRows
 	}
 
 	c.ClipRect(listRect)
 	for i := 0; i < visible; i++ {
-		optIdx := i + *scroll
+		dr := rows[i+*scroll]
 		rowRect := Rect{X: listRect.X, Y: listRect.Y + i*SelectRowHeight, W: listRect.W, H: SelectRowHeight}
+
+		if dr.optIdx < 0 {
+			c.FillRect(rowRect, Color{R: 0, G: 0, B: 0, A: 70})
+			c.FillRect(Rect{X: rowRect.X, Y: rowRect.Y + rowRect.H - 1, W: rowRect.W, H: 1}, borderCol)
+			label, _, _ := fitText(c, strings.ToUpper(dr.header), fontSize-3, rowRect.W-20)
+			c.TextVCentered(rowRect.X+14, rowRect, headerCol, fontSize-3, label)
+
+			continue
+		}
+
 		hover := rowRect.Contains(in.MouseX, in.MouseY)
 		if hover {
 			c.FillRect(rowRect, hoverBg)
 		}
-		if optIdx == current {
+		if dr.optIdx == current {
 			c.FillRect(Rect{X: rowRect.X, Y: rowRect.Y, W: 3, H: rowRect.H}, textCol)
 		}
-		label, _, _ := fitText(c, options[optIdx], fontSize, rowRect.W-20)
-		c.TextVCentered(rowRect.X+10, rowRect, textCol, fontSize, label)
+		indent := 10
+		if groups != nil {
+			indent = 22
+		}
+		label, _, _ := fitText(c, options[dr.optIdx], fontSize, rowRect.W-indent-10)
+		c.TextVCentered(rowRect.X+indent, rowRect, textCol, fontSize, label)
 		if hover && in.Released {
-			newIdx = optIdx
+			newIdx = dr.optIdx
 			selected = true
 		}
 	}
@@ -552,7 +608,7 @@ func SelectList(c *Canvas, in *Input, headerRect Rect, options []string, current
 
 	if maxScroll > 0 {
 		trackH := listRect.H - 6
-		thumbH := trackH * visibleRows / len(options)
+		thumbH := trackH * visibleRows / len(rows)
 		if thumbH < 14 {
 			thumbH = 14
 		}

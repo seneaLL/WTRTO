@@ -1,5 +1,7 @@
 package hud
 
+import "fmt"
+
 type Binding string
 
 const (
@@ -31,70 +33,83 @@ const (
 	BindRadioAlt Binding = "radio_altitude_m"
 	BindTurn     Binding = "turn"
 
-	BindThrottle1 Binding = "throttle_1_pct"
-	BindThrottle2 Binding = "throttle_2_pct"
-	BindThrottle3 Binding = "throttle_3_pct"
-	BindThrottle4 Binding = "throttle_4_pct"
-
-	BindRPM1 Binding = "rpm_1"
-	BindRPM2 Binding = "rpm_2"
-	BindRPM3 Binding = "rpm_3"
-	BindRPM4 Binding = "rpm_4"
-
-	BindManifold1 Binding = "manifold_pressure_1_atm"
-	BindManifold2 Binding = "manifold_pressure_2_atm"
-	BindManifold3 Binding = "manifold_pressure_3_atm"
-	BindManifold4 Binding = "manifold_pressure_4_atm"
-
-	BindOilTemp3 Binding = "oil_temp_3"
-	BindOilTemp4 Binding = "oil_temp_4"
-
-	BindWaterTemp1 Binding = "water_temp_1"
-	BindWaterTemp2 Binding = "water_temp_2"
-	BindWaterTemp3 Binding = "water_temp_3"
-	BindWaterTemp4 Binding = "water_temp_4"
-
-	BindPower1 Binding = "power_1_hp"
-	BindPower2 Binding = "power_2_hp"
-	BindPower3 Binding = "power_3_hp"
-	BindPower4 Binding = "power_4_hp"
-
-	BindThrust1 Binding = "thrust_1_kgs"
-	BindThrust2 Binding = "thrust_2_kgs"
-	BindThrust3 Binding = "thrust_3_kgs"
-	BindThrust4 Binding = "thrust_4_kgs"
-
-	BindEfficiency1 Binding = "efficiency_1_pct"
-	BindEfficiency2 Binding = "efficiency_2_pct"
-	BindEfficiency3 Binding = "efficiency_3_pct"
-	BindEfficiency4 Binding = "efficiency_4_pct"
-
-	BindPropPitch1 Binding = "prop_pitch_1_deg"
-	BindPropPitch2 Binding = "prop_pitch_2_deg"
-	BindPropPitch3 Binding = "prop_pitch_3_deg"
-	BindPropPitch4 Binding = "prop_pitch_4_deg"
-
 	BindWingSweep Binding = "wing_sweep_pct"
 )
 
-var AllBindings = []Binding{
-	BindThrottlePct, BindIAS, BindTAS, BindMach, BindAltitude,
-	BindFuelKg, BindFuelTime, BindFuelRate, BindOilTemp1, BindOilTemp2,
-	BindCompass, BindAoA, BindAoS, BindGLoad, BindVSpeed, BindIASRate,
+const MaxEngines = 8
 
-	BindAileron, BindElevator, BindRudder, BindFlaps, BindGearPct,
-	BindRollRate, BindFuelPct, BindTrimmer, BindRadioAlt, BindTurn,
+type engineMetric struct {
+	name     string
+	format   string
+	labelKey string
+	get      func(v Values, i int) float64
+}
 
-	BindThrottle1, BindThrottle2, BindThrottle3, BindThrottle4,
-	BindRPM1, BindRPM2, BindRPM3, BindRPM4,
-	BindManifold1, BindManifold2, BindManifold3, BindManifold4,
-	BindOilTemp3, BindOilTemp4,
-	BindWaterTemp1, BindWaterTemp2, BindWaterTemp3, BindWaterTemp4,
-	BindPower1, BindPower2, BindPower3, BindPower4,
-	BindThrust1, BindThrust2, BindThrust3, BindThrust4,
-	BindEfficiency1, BindEfficiency2, BindEfficiency3, BindEfficiency4,
-	BindPropPitch1, BindPropPitch2, BindPropPitch3, BindPropPitch4,
-	BindWingSweep,
+var engineMetrics = []engineMetric{
+	{"throttle", "throttle_%d_pct", "editor.metric.throttle", func(v Values, i int) float64 { return v.EngineThrottle[i] }},
+	{"rpm", "rpm_%d", "editor.metric.rpm", func(v Values, i int) float64 { return v.EngineRPM[i] }},
+	{"manifold", "manifold_pressure_%d_atm", "editor.metric.manifold", func(v Values, i int) float64 { return v.EngineManifold[i] }},
+	{"oil_temp", "oil_temp_%d", "editor.metric.oil_temp", func(v Values, i int) float64 { return v.EngineOilTemp[i] }},
+	{"water_temp", "water_temp_%d", "editor.metric.water_temp", func(v Values, i int) float64 { return v.EngineWaterTemp[i] }},
+	{"power", "power_%d_hp", "editor.metric.power", func(v Values, i int) float64 { return v.EnginePower[i] }},
+	{"thrust", "thrust_%d_kgs", "editor.metric.thrust", func(v Values, i int) float64 { return v.EngineThrust[i] }},
+	{"efficiency", "efficiency_%d_pct", "editor.metric.efficiency", func(v Values, i int) float64 { return v.EngineEfficiency[i] }},
+	{"prop_pitch", "prop_pitch_%d_deg", "editor.metric.prop_pitch", func(v Values, i int) float64 { return v.EnginePropPitch[i] }},
+}
+
+func engineBinding(m engineMetric, n int) Binding {
+	return Binding(fmt.Sprintf(m.format, n))
+}
+
+var AllBindings = buildAllBindings()
+
+func buildAllBindings() []Binding {
+	list := []Binding{
+		BindThrottlePct, BindIAS, BindTAS, BindMach, BindAltitude,
+		BindFuelKg, BindFuelTime, BindFuelRate, BindOilTemp1, BindOilTemp2,
+		BindCompass, BindAoA, BindAoS, BindGLoad, BindVSpeed, BindIASRate,
+
+		BindAileron, BindElevator, BindRudder, BindFlaps, BindGearPct,
+		BindRollRate, BindFuelPct, BindTrimmer, BindRadioAlt, BindTurn,
+	}
+
+	for _, m := range engineMetrics {
+		start := 1
+		if m.name == "oil_temp" {
+			start = 3
+		}
+		for n := start; n <= 4; n++ {
+			list = append(list, engineBinding(m, n))
+		}
+	}
+
+	list = append(list, BindWingSweep)
+
+	for n := 5; n <= MaxEngines; n++ {
+		for _, m := range engineMetrics {
+			list = append(list, engineBinding(m, n))
+		}
+	}
+
+	return list
+}
+
+type engineBindingRef struct {
+	metric engineMetric
+	n      int
+}
+
+var engineBindingIndex = buildEngineBindingIndex()
+
+func buildEngineBindingIndex() map[Binding]engineBindingRef {
+	idx := make(map[Binding]engineBindingRef, MaxEngines*len(engineMetrics))
+	for n := 1; n <= MaxEngines; n++ {
+		for _, m := range engineMetrics {
+			idx[engineBinding(m, n)] = engineBindingRef{metric: m, n: n}
+		}
+	}
+
+	return idx
 }
 
 type Style string

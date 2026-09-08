@@ -169,10 +169,6 @@ func bindingValue(b Binding, v Values) float64 {
 		return v.FuelTimeMin
 	case BindFuelRate:
 		return v.FuelRateKgM
-	case BindOilTemp1:
-		return v.OilTemp1
-	case BindOilTemp2:
-		return v.OilTemp2
 	case BindCompass:
 		return v.Compass
 	case BindAoA:
@@ -208,83 +204,10 @@ func bindingValue(b Binding, v Values) float64 {
 		return v.Turn
 	case BindWingSweep:
 		return v.WingSweep
+	}
 
-	case BindThrottle1:
-		return v.EngineThrottle[0]
-	case BindThrottle2:
-		return v.EngineThrottle[1]
-	case BindThrottle3:
-		return v.EngineThrottle[2]
-	case BindThrottle4:
-		return v.EngineThrottle[3]
-
-	case BindRPM1:
-		return v.EngineRPM[0]
-	case BindRPM2:
-		return v.EngineRPM[1]
-	case BindRPM3:
-		return v.EngineRPM[2]
-	case BindRPM4:
-		return v.EngineRPM[3]
-
-	case BindManifold1:
-		return v.EngineManifold[0]
-	case BindManifold2:
-		return v.EngineManifold[1]
-	case BindManifold3:
-		return v.EngineManifold[2]
-	case BindManifold4:
-		return v.EngineManifold[3]
-
-	case BindOilTemp3:
-		return v.EngineOilTemp[2]
-	case BindOilTemp4:
-		return v.EngineOilTemp[3]
-
-	case BindWaterTemp1:
-		return v.EngineWaterTemp[0]
-	case BindWaterTemp2:
-		return v.EngineWaterTemp[1]
-	case BindWaterTemp3:
-		return v.EngineWaterTemp[2]
-	case BindWaterTemp4:
-		return v.EngineWaterTemp[3]
-
-	case BindPower1:
-		return v.EnginePower[0]
-	case BindPower2:
-		return v.EnginePower[1]
-	case BindPower3:
-		return v.EnginePower[2]
-	case BindPower4:
-		return v.EnginePower[3]
-
-	case BindThrust1:
-		return v.EngineThrust[0]
-	case BindThrust2:
-		return v.EngineThrust[1]
-	case BindThrust3:
-		return v.EngineThrust[2]
-	case BindThrust4:
-		return v.EngineThrust[3]
-
-	case BindEfficiency1:
-		return v.EngineEfficiency[0]
-	case BindEfficiency2:
-		return v.EngineEfficiency[1]
-	case BindEfficiency3:
-		return v.EngineEfficiency[2]
-	case BindEfficiency4:
-		return v.EngineEfficiency[3]
-
-	case BindPropPitch1:
-		return v.EnginePropPitch[0]
-	case BindPropPitch2:
-		return v.EnginePropPitch[1]
-	case BindPropPitch3:
-		return v.EnginePropPitch[2]
-	case BindPropPitch4:
-		return v.EnginePropPitch[3]
+	if ref, ok := engineBindingIndex[b]; ok {
+		return ref.metric.get(v, ref.n-1)
 	}
 
 	return 0

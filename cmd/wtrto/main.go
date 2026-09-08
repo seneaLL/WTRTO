@@ -724,7 +724,7 @@ func launcherFrame(c *native.Canvas, in *native.Input, w *native.Window) bool {
 	}
 
 	if fpsDropdownOpen {
-		newIdx, selected := native.SelectList(c, originalIn, fpsRect, fpsOptionLabels(), fpsIndex(fpsLimit), &fpsDropdownScroll, curH, colorPanel, colorPanelHover, colorText, colorTextDim, 13)
+		newIdx, selected := native.SelectList(c, originalIn, fpsRect, fpsOptionLabels(), nil, fpsIndex(fpsLimit), &fpsDropdownScroll, curH, colorPanel, colorPanelHover, colorText, colorTextDim, colorTextDim, 13)
 		switch {
 		case selected:
 			fpsLimit = fpsOptions[newIdx]
