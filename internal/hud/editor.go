@@ -31,6 +31,20 @@ var (
 	tooltipBg    = native.Color{R: 10, G: 12, B: 15, A: 235}
 )
 
+type bgPreset struct {
+	color  Color
+	border bool
+}
+
+func bgPresets() []bgPreset {
+	return []bgPreset{
+		{color: defaultTextBg},
+		{color: Color{R: 0, G: 0, B: 0, A: 235}},
+		{color: Color{R: 255, G: 255, B: 255, A: 55}},
+		{color: Color{R: 0, G: 0, B: 0, A: 140}, border: true},
+	}
+}
+
 func newElement() Element {
 	return Element{
 		ID:        fmt.Sprintf("el_%d", time.Now().UnixNano()),
@@ -55,41 +69,43 @@ type bindingOption struct {
 }
 
 var staticBindingMeta = []struct {
-	value    Binding
-	labelKey string
-	groupKey string
+	value      Binding
+	labelKey   string
+	groupKey   string
+	shortLabel string
+	unit       string
 }{
-	{BindIAS, "editor.metric.ias", "editor.group_speed"},
-	{BindTAS, "editor.metric.tas", "editor.group_speed"},
-	{BindMach, "editor.metric.mach", "editor.group_speed"},
-	{BindThrottlePct, "editor.metric.throttle_pct", "editor.group_speed"},
+	{BindIAS, "editor.metric.ias", "editor.group_speed", "IAS", "km/h"},
+	{BindTAS, "editor.metric.tas", "editor.group_speed", "TAS", "km/h"},
+	{BindMach, "editor.metric.mach", "editor.group_speed", "MACH", ""},
+	{BindThrottlePct, "editor.metric.throttle_pct", "editor.group_speed", "THR", "%"},
 
-	{BindAltitude, "editor.metric.altitude", "editor.group_altitude"},
-	{BindRadioAlt, "editor.metric.radio_altitude", "editor.group_altitude"},
-	{BindVSpeed, "editor.metric.vspeed", "editor.group_altitude"},
+	{BindAltitude, "editor.metric.altitude", "editor.group_altitude", "ALT", "m"},
+	{BindRadioAlt, "editor.metric.radio_altitude", "editor.group_altitude", "RALT", "m"},
+	{BindVSpeed, "editor.metric.vspeed", "editor.group_altitude", "VS", "m/s"},
 
-	{BindCompass, "editor.metric.compass", "editor.group_navigation"},
-	{BindTurn, "editor.metric.turn", "editor.group_navigation"},
+	{BindCompass, "editor.metric.compass", "editor.group_navigation", "HDG", "°"},
+	{BindTurn, "editor.metric.turn", "editor.group_navigation", "TURN", ""},
 
-	{BindAoA, "editor.metric.aoa", "editor.group_aero"},
-	{BindAoS, "editor.metric.aos", "editor.group_aero"},
-	{BindGLoad, "editor.metric.gload", "editor.group_aero"},
-	{BindIASRate, "editor.metric.ias_rate", "editor.group_aero"},
-	{BindWingSweep, "editor.metric.wing_sweep", "editor.group_aero"},
+	{BindAoA, "editor.metric.aoa", "editor.group_aero", "AoA", "°"},
+	{BindAoS, "editor.metric.aos", "editor.group_aero", "AoS", "°"},
+	{BindGLoad, "editor.metric.gload", "editor.group_aero", "G", ""},
+	{BindIASRate, "editor.metric.ias_rate", "editor.group_aero", "ACC", "km/h/s"},
+	{BindWingSweep, "editor.metric.wing_sweep", "editor.group_aero", "SWEEP", "%"},
 
-	{BindAileron, "editor.metric.aileron", "editor.group_controls"},
-	{BindElevator, "editor.metric.elevator", "editor.group_controls"},
-	{BindRudder, "editor.metric.rudder", "editor.group_controls"},
-	{BindFlaps, "editor.metric.flaps", "editor.group_controls"},
-	{BindGearPct, "editor.metric.gear", "editor.group_controls"},
-	{BindAirbrake, "editor.metric.airbrake", "editor.group_controls"},
-	{BindRollRate, "editor.metric.roll_rate", "editor.group_controls"},
-	{BindTrimmer, "editor.metric.trimmer", "editor.group_controls"},
+	{BindAileron, "editor.metric.aileron", "editor.group_controls", "AIL", "%"},
+	{BindElevator, "editor.metric.elevator", "editor.group_controls", "ELEV", "%"},
+	{BindRudder, "editor.metric.rudder", "editor.group_controls", "RUD", "%"},
+	{BindFlaps, "editor.metric.flaps", "editor.group_controls", "FLAP", "%"},
+	{BindGearPct, "editor.metric.gear", "editor.group_controls", "GEAR", "%"},
+	{BindAirbrake, "editor.metric.airbrake", "editor.group_controls", "AIRBRK", "%"},
+	{BindRollRate, "editor.metric.roll_rate", "editor.group_controls", "ROLL", "°/s"},
+	{BindTrimmer, "editor.metric.trimmer", "editor.group_controls", "TRIM", "%"},
 
-	{BindFuelKg, "editor.metric.fuel_kg", "editor.group_fuel"},
-	{BindFuelPct, "editor.metric.fuel_pct", "editor.group_fuel"},
-	{BindFuelTime, "editor.metric.fuel_time", "editor.group_fuel"},
-	{BindFuelRate, "editor.metric.fuel_rate", "editor.group_fuel"},
+	{BindFuelKg, "editor.metric.fuel_kg", "editor.group_fuel", "FUEL", "kg"},
+	{BindFuelPct, "editor.metric.fuel_pct", "editor.group_fuel", "FUEL", "%"},
+	{BindFuelTime, "editor.metric.fuel_time", "editor.group_fuel", "FUEL", "min"},
+	{BindFuelRate, "editor.metric.fuel_rate", "editor.group_fuel", "FUEL", "kg/min"},
 }
 
 func bindingOptions() []bindingOption {
@@ -105,6 +121,19 @@ func bindingOptions() []bindingOption {
 	}
 
 	return opts
+}
+
+func defaultLabelUnit(b Binding) (string, string) {
+	if ref, ok := engineBindingIndex[b]; ok {
+		return fmt.Sprintf("%s%d", ref.metric.shortLabel, ref.n), ref.metric.unit
+	}
+	for _, s := range staticBindingMeta {
+		if s.value == b {
+			return s.shortLabel, s.unit
+		}
+	}
+
+	return "", ""
 }
 
 func indexOfBindingOption(opts []bindingOption, v Binding) int {
@@ -771,6 +800,7 @@ func DrawPropertiesPanel(c *native.Canvas, in *native.Input, screenW, screenH in
 			newBind := Binding(values[i])
 			if newBind != e.Binding {
 				e.Binding = newBind
+				e.Label, e.Unit = defaultLabelUnit(newBind)
 				changed = true
 			}
 		}, selectExtra{Labels: labels, Groups: groups})
@@ -837,6 +867,33 @@ func DrawPropertiesPanel(c *native.Canvas, in *native.Input, screenW, screenH in
 		y += 34
 
 		if e.BgEnabled {
+			label(i18n.T("editor.background_presets"))
+			presets := bgPresets()
+			presetGap := 8
+			presetW := (PanelWidth - 32 - presetGap*(len(presets)-1)) / len(presets)
+			presetRowRect := native.Rect{X: panelX + 16, Y: y, W: PanelWidth - 32, H: 28}
+			for pi, p := range presets {
+				pr := native.Rect{X: presetRowRect.X + pi*(presetW+presetGap), Y: y, W: presetW, H: 28}
+				c.FillRoundedRect(pr, native.RadiusSmall, toNativeColor(p.color))
+				borderCol := fieldBorder
+				borderWidth := 1
+				if p.color == e.BgColor && p.border == e.BgBorder {
+					borderCol = fieldFocus
+					borderWidth = 2
+				}
+				c.StrokeRoundedRect(pr, native.RadiusSmall, borderCol, borderWidth)
+				if p.border {
+					inset := native.Rect{X: pr.X + 4, Y: pr.Y + 4, W: pr.W - 8, H: pr.H - 8}
+					c.StrokeRoundedRect(inset, native.RadiusSmall, toNativeColor(e.Color), 1)
+				}
+				if pr.Contains(in.MouseX, in.MouseY) && in.Released {
+					e.BgColor = p.color
+					e.BgBorder = p.border
+					changed = true
+				}
+			}
+			y += 28 + panelGroupGap
+
 			label(i18n.T("editor.background_color"))
 			bgPickerH := native.ColorPickerHeight(PanelWidth - 32)
 			newBgCol := native.ColorPicker(c, in, native.Rect{X: panelX + 16, Y: y, W: PanelWidth - 32, H: bgPickerH}, toNativeColor(e.BgColor))

@@ -399,7 +399,11 @@ func Draw(c *native.Canvas, screenW, screenH int, tmpl *Template, v Values, edit
 				if bg.A == 0 {
 					bg = defaultTextBg
 				}
-				c.FillRoundedRect(native.Rect{X: x - 5, Y: y - th - 4, W: tw + 10, H: th + 10}, native.RadiusSmall, toNativeColor(bg))
+				bgRect := native.Rect{X: x - 5, Y: y - th - 5, W: tw + 10, H: th + 14}
+				c.FillRoundedRect(bgRect, native.RadiusSmall, toNativeColor(bg))
+				if e.BgBorder {
+					c.StrokeRoundedRect(bgRect, native.RadiusSmall, col, 1)
+				}
 			}
 			if e.Glow {
 				glowBehindText(c, x, y, col, fs, text)

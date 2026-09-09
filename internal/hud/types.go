@@ -41,22 +41,24 @@ const (
 const MaxEngines = 8
 
 type engineMetric struct {
-	name     string
-	format   string
-	labelKey string
-	get      func(v Values, i int) float64
+	name       string
+	format     string
+	labelKey   string
+	shortLabel string
+	unit       string
+	get        func(v Values, i int) float64
 }
 
 var engineMetrics = []engineMetric{
-	{"throttle", "throttle_%d_pct", "editor.metric.throttle", func(v Values, i int) float64 { return v.EngineThrottle[i] }},
-	{"rpm", "rpm_%d", "editor.metric.rpm", func(v Values, i int) float64 { return v.EngineRPM[i] }},
-	{"manifold", "manifold_pressure_%d_atm", "editor.metric.manifold", func(v Values, i int) float64 { return v.EngineManifold[i] }},
-	{"oil_temp", "oil_temp_%d", "editor.metric.oil_temp", func(v Values, i int) float64 { return v.EngineOilTemp[i] }},
-	{"water_temp", "water_temp_%d", "editor.metric.water_temp", func(v Values, i int) float64 { return v.EngineWaterTemp[i] }},
-	{"power", "power_%d_hp", "editor.metric.power", func(v Values, i int) float64 { return v.EnginePower[i] }},
-	{"thrust", "thrust_%d_kgs", "editor.metric.thrust", func(v Values, i int) float64 { return v.EngineThrust[i] }},
-	{"efficiency", "efficiency_%d_pct", "editor.metric.efficiency", func(v Values, i int) float64 { return v.EngineEfficiency[i] }},
-	{"prop_pitch", "prop_pitch_%d_deg", "editor.metric.prop_pitch", func(v Values, i int) float64 { return v.EnginePropPitch[i] }},
+	{"throttle", "throttle_%d_pct", "editor.metric.throttle", "THR", "%", func(v Values, i int) float64 { return v.EngineThrottle[i] }},
+	{"rpm", "rpm_%d", "editor.metric.rpm", "RPM", "rpm", func(v Values, i int) float64 { return v.EngineRPM[i] }},
+	{"manifold", "manifold_pressure_%d_atm", "editor.metric.manifold", "MAP", "atm", func(v Values, i int) float64 { return v.EngineManifold[i] }},
+	{"oil_temp", "oil_temp_%d", "editor.metric.oil_temp", "OIL", "°C", func(v Values, i int) float64 { return v.EngineOilTemp[i] }},
+	{"water_temp", "water_temp_%d", "editor.metric.water_temp", "WTR", "°C", func(v Values, i int) float64 { return v.EngineWaterTemp[i] }},
+	{"power", "power_%d_hp", "editor.metric.power", "PWR", "hp", func(v Values, i int) float64 { return v.EnginePower[i] }},
+	{"thrust", "thrust_%d_kgs", "editor.metric.thrust", "THRU", "kgf", func(v Values, i int) float64 { return v.EngineThrust[i] }},
+	{"efficiency", "efficiency_%d_pct", "editor.metric.efficiency", "EFF", "%", func(v Values, i int) float64 { return v.EngineEfficiency[i] }},
+	{"prop_pitch", "prop_pitch_%d_deg", "editor.metric.prop_pitch", "PROP", "°", func(v Values, i int) float64 { return v.EnginePropPitch[i] }},
 }
 
 func engineBinding(m engineMetric, n int) Binding {
@@ -175,6 +177,7 @@ type Element struct {
 	AutoColor bool        `json:"auto_color,omitempty"`
 	BgEnabled bool        `json:"bg_enabled,omitempty"`
 	BgColor   Color       `json:"bg_color,omitempty"`
+	BgBorder  bool        `json:"bg_border,omitempty"`
 
 	Length    float64 `json:"length,omitempty"`
 	Range     float64 `json:"range,omitempty"`
